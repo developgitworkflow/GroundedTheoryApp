@@ -3,7 +3,6 @@ import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact, ProjectSettings
 import { 
     Crown, 
     Sparkles, 
-    AlertCircle, 
     ArrowRight, 
     BookOpen, 
     Layout, 
@@ -12,18 +11,20 @@ import {
     Tag, 
     FileText, 
     Quote, 
-    ChevronRight, 
     ChevronDown, 
     StickyNote, 
     Lightbulb,
     Plus,
     Network,
-    Table,
     Edit,
     Trash2,
     Save,
-    X,
-    CheckCircle2
+    CheckCircle2,
+    List,
+    Kanban,
+    AlertCircle,
+    Link as LinkIcon,
+    GitBranch
 } from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
@@ -75,6 +76,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   const [dirSearch, setDirSearch] = useState('');
   
   // Findings State
+  const [findingsView, setFindingsView] = useState<'list' | 'board'>('list');
   const [isCreatingFinding, setIsCreatingFinding] = useState(false);
   const [newFindingTitle, setNewFindingTitle] = useState('');
   const [newFindingContent, setNewFindingContent] = useState('');
@@ -179,6 +181,28 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
       );
   };
 
+  // --- Mapper Logic (Board) ---
+  const getFindingsForRQ = (rqId: string) => {
+    return findingMemos.filter(m => m.relatedIds && m.relatedIds.includes(rqId));
+  };
+
+  const handleDragStart = (e: React.DragEvent, memoId: string) => {
+      e.dataTransfer.setData('memoId', memoId);
+  };
+
+  const handleDrop = (e: React.DragEvent, rqId: string) => {
+      e.preventDefault();
+      const memoId = e.dataTransfer.getData('memoId');
+      const memo = memos.find(m => m.id === memoId);
+      
+      if (memo) {
+          const currentRelated = memo.relatedIds || [];
+          if (!currentRelated.includes(rqId)) {
+              onUpdateMemo(memoId, { relatedIds: [...currentRelated, rqId] });
+          }
+      }
+  };
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 overflow-hidden">
         {/* Sub-Navigation for Theory Area */}
@@ -217,183 +241,266 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                 </div>
             )}
 
-            {/* VIEW: FINDINGS MANAGER (CRUD) */}
+            {/* VIEW: FINDINGS MANAGER (CRUD & MAPPER) */}
             {activeView === 'findings' && (
-                <div className="h-full w-full animate-in fade-in duration-300 p-8 overflow-y-auto">
-                    <div className="max-w-5xl mx-auto space-y-6">
-                        <div className="flex justify-between items-center">
+                <div className="h-full w-full animate-in fade-in duration-300 p-8 overflow-y-auto flex flex-col">
+                    <div className="max-w-5xl mx-auto space-y-6 w-full flex-1 flex flex-col">
+                        <div className="flex justify-between items-center shrink-0">
                             <div>
                                 <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
                                     <Lightbulb size={20} className="text-amber-500" />
                                     Emergent Findings
                                 </h2>
-                                <p className="text-sm text-zinc-500">Manage key theoretical insights derived from data.</p>
+                                <p className="text-sm text-zinc-500">Manage key theoretical insights and map them to research questions.</p>
                             </div>
-                            <Button 
-                                onClick={() => setIsCreatingFinding(true)}
-                                className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
-                            >
-                                <Plus size={16} /> New Finding
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <div className="flex bg-zinc-900 border border-zinc-800 rounded-md p-0.5">
+                                    <Button 
+                                        size="xs" 
+                                        variant={findingsView === 'list' ? 'secondary' : 'ghost'} 
+                                        onClick={() => setFindingsView('list')}
+                                        className="gap-2"
+                                    >
+                                        <List size={14} /> List
+                                    </Button>
+                                    <Button 
+                                        size="xs" 
+                                        variant={findingsView === 'board' ? 'secondary' : 'ghost'} 
+                                        onClick={() => setFindingsView('board')}
+                                        className="gap-2"
+                                    >
+                                        <Kanban size={14} /> Mapper
+                                    </Button>
+                                </div>
+                                <div className="w-px h-6 bg-zinc-800 mx-1" />
+                                <Button 
+                                    onClick={() => {
+                                        setIsCreatingFinding(true);
+                                        setFindingsView('list'); // Switch to list to show form
+                                    }}
+                                    className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+                                    size="sm"
+                                >
+                                    <Plus size={16} /> New Finding
+                                </Button>
+                            </div>
                         </div>
 
-                        {/* Create Form */}
-                        {isCreatingFinding && (
-                            <Card className="border-amber-900/50 bg-amber-950/10 animate-in slide-in-from-top-2">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm font-medium text-amber-500 uppercase">Draft New Finding</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <Input 
-                                        placeholder="Finding Title (e.g., 'The Paradox of Autonomy')" 
-                                        value={newFindingTitle}
-                                        onChange={(e) => setNewFindingTitle(e.target.value)}
-                                        className="bg-zinc-900 border-zinc-700"
-                                    />
-                                    <textarea 
-                                        placeholder="Describe the finding..."
-                                        value={newFindingContent}
-                                        onChange={(e) => setNewFindingContent(e.target.value)}
-                                        className="w-full h-32 bg-zinc-900 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                    />
-                                    
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold uppercase text-zinc-500">Ground in Categories</label>
-                                        <div className="flex flex-wrap gap-2 p-3 bg-zinc-900/50 rounded border border-zinc-800">
-                                            {categories.length === 0 && <span className="text-xs text-zinc-500 italic">No categories defined yet.</span>}
-                                            {categories.map(cat => (
-                                                <React.Fragment key={cat.id}>
-                                                <Badge 
-                                                    variant={newFindingCategoryIds.includes(cat.id) ? "default" : "outline"}
-                                                    className={cn(
-                                                        "cursor-pointer transition-all hover:brightness-110",
-                                                        newFindingCategoryIds.includes(cat.id) ? "border-transparent text-white" : "border-zinc-700 bg-transparent"
-                                                    )}
-                                                    onClick={() => toggleNewFindingCategory(cat.id)}
-                                                    style={newFindingCategoryIds.includes(cat.id) ? { backgroundColor: cat.color } : { color: cat.color, borderColor: cat.color }}
-                                                >
-                                                    {newFindingCategoryIds.includes(cat.id) && <CheckCircle2 size={10} className="mr-1 inline" />}
-                                                    {cat.name}
-                                                </Badge>
-                                                </React.Fragment>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </CardContent>
-                                <CardFooter className="flex justify-end gap-2 border-t border-zinc-800/50 pt-4">
-                                    <Button variant="ghost" onClick={() => setIsCreatingFinding(false)}>Cancel</Button>
-                                    <Button variant="brand" onClick={submitNewFinding} disabled={!newFindingTitle || !newFindingContent}>Save Finding</Button>
-                                </CardFooter>
-                            </Card>
-                        )}
-
-                        {/* Findings List */}
-                        <div className="grid gap-4">
-                            {findingMemos.length === 0 && !isCreatingFinding && (
-                                <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-lg">
-                                    No findings recorded yet. Start by creating one.
-                                </div>
-                            )}
-                            {findingMemos.map(finding => (
-                                <Card key={finding.id} className="bg-zinc-900/30 border-zinc-800 hover:border-zinc-700 transition-colors">
-                                    {editingFindingId === finding.id ? (
-                                        // Edit Mode
-                                        <div className="p-4 space-y-4">
+                        {/* CONTENT AREA */}
+                        {findingsView === 'list' ? (
+                            <div className="space-y-6">
+                                {/* Create Form */}
+                                {isCreatingFinding && (
+                                    <Card className="border-amber-900/50 bg-amber-950/10 animate-in slide-in-from-top-2">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-medium text-amber-500 uppercase">Draft New Finding</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
                                             <Input 
-                                                defaultValue={finding.title}
-                                                onChange={(e) => finding.title = e.target.value} // Temporary mutation for immediate UI feedback before save
-                                                className="bg-zinc-950 border-zinc-700 font-bold"
+                                                placeholder="Finding Title (e.g., 'The Paradox of Autonomy')" 
+                                                value={newFindingTitle}
+                                                onChange={(e) => setNewFindingTitle(e.target.value)}
+                                                className="bg-zinc-900 border-zinc-700"
                                             />
                                             <textarea 
-                                                defaultValue={finding.content}
-                                                onChange={(e) => finding.content = e.target.value}
-                                                className="w-full h-32 bg-zinc-950 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none"
+                                                placeholder="Describe the finding..."
+                                                value={newFindingContent}
+                                                onChange={(e) => setNewFindingContent(e.target.value)}
+                                                className="w-full h-32 bg-zinc-900 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
                                             />
                                             
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase text-zinc-500">Related Categories</label>
-                                                <div className="flex flex-wrap gap-2 p-2 bg-zinc-950/50 rounded border border-zinc-800">
+                                                <label className="text-xs font-bold uppercase text-zinc-500">Ground in Categories</label>
+                                                <div className="flex flex-wrap gap-2 p-3 bg-zinc-900/50 rounded border border-zinc-800">
+                                                    {categories.length === 0 && <span className="text-xs text-zinc-500 italic">No categories defined yet.</span>}
                                                     {categories.map(cat => (
                                                         <React.Fragment key={cat.id}>
                                                         <Badge 
-                                                            variant={editingFindingCategoryIds.includes(cat.id) ? "default" : "outline"}
-                                                            className="cursor-pointer"
-                                                            onClick={() => toggleEditingFindingCategory(cat.id)}
-                                                            style={editingFindingCategoryIds.includes(cat.id) ? { backgroundColor: cat.color } : { color: cat.color, borderColor: cat.color }}
+                                                            variant={newFindingCategoryIds.includes(cat.id) ? "default" : "outline"}
+                                                            className={cn(
+                                                                "cursor-pointer transition-all hover:brightness-110",
+                                                                newFindingCategoryIds.includes(cat.id) ? "border-transparent text-white" : "border-zinc-700 bg-transparent"
+                                                            )}
+                                                            onClick={() => toggleNewFindingCategory(cat.id)}
+                                                            style={newFindingCategoryIds.includes(cat.id) ? { backgroundColor: cat.color } : { color: cat.color, borderColor: cat.color }}
                                                         >
-                                                            {editingFindingCategoryIds.includes(cat.id) && <CheckCircle2 size={10} className="mr-1 inline" />}
+                                                            {newFindingCategoryIds.includes(cat.id) && <CheckCircle2 size={10} className="mr-1 inline" />}
                                                             {cat.name}
                                                         </Badge>
                                                         </React.Fragment>
                                                     ))}
                                                 </div>
                                             </div>
+                                        </CardContent>
+                                        <CardFooter className="flex justify-end gap-2 border-t border-zinc-800/50 pt-4">
+                                            <Button variant="ghost" onClick={() => setIsCreatingFinding(false)}>Cancel</Button>
+                                            <Button variant="brand" onClick={submitNewFinding} disabled={!newFindingTitle || !newFindingContent}>Save Finding</Button>
+                                        </CardFooter>
+                                    </Card>
+                                )}
 
-                                            <div className="flex justify-end gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => setEditingFindingId(null)}>Cancel</Button>
-                                                <Button variant="brand" size="sm" onClick={() => {
-                                                    // Preserve non-category related IDs (like RQs) if needed, but for now we replace the category portion
-                                                    // A simple merge strategy: keep existing non-category IDs, replace category IDs
-                                                    const otherIds = finding.relatedIds.filter(id => !categories.some(c => c.id === id));
-                                                    const newRelatedIds = [...otherIds, ...editingFindingCategoryIds];
-                                                    
-                                                    onUpdateMemo(finding.id, { 
-                                                        title: finding.title, 
-                                                        content: finding.content,
-                                                        relatedIds: newRelatedIds
-                                                    });
-                                                    setEditingFindingId(null);
-                                                }}>
-                                                    <Save size={14} className="mr-2"/> Save
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        // View Mode
-                                        <div className="p-4 flex flex-col gap-2">
-                                            <div className="flex justify-between items-start">
-                                                <h3 className="font-bold text-zinc-200">{finding.title}</h3>
-                                                <div className="flex gap-1">
-                                                    <Button size="icon" variant="ghost" onClick={() => startEditingFinding(finding)} className="h-8 w-8 text-zinc-500 hover:text-white">
-                                                        <Edit size={14} />
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" onClick={() => onDeleteMemo && onDeleteMemo(finding.id)} className="h-8 w-8 text-zinc-500 hover:text-red-500">
-                                                        <Trash2 size={14} />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                            <p className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
-                                                {finding.content}
-                                            </p>
-                                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800/50 flex-wrap">
-                                                <span className="text-[10px] text-zinc-600 font-mono">ID: {finding.id}</span>
-                                                <div className="flex flex-wrap gap-1 ml-auto">
-                                                    {finding.relatedIds.length > 0 ? (
-                                                        finding.relatedIds.map(rid => {
-                                                            const linkedCat = categories.find(c => c.id === rid);
-                                                            if (linkedCat) {
-                                                                return (
-                                                                    <React.Fragment key={rid}>
-                                                                    <Badge variant="outline" className="text-[10px] h-5 border-zinc-700 bg-zinc-900/50" style={{ color: linkedCat.color, borderColor: linkedCat.color + '40' }}>
-                                                                        <div className="w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: linkedCat.color }} />
-                                                                        {linkedCat.name}
-                                                                    </Badge>
-                                                                    </React.Fragment>
-                                                                );
-                                                            }
-                                                            // Could render generic badge for RQs here if we had RQ list handy, but skipping for minimal change
-                                                            return null;
-                                                        })
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-[10px] h-5 border-amber-900 text-amber-600">Unmapped</Badge>
-                                                    )}
-                                                </div>
-                                            </div>
+                                {/* Findings List */}
+                                <div className="grid gap-4">
+                                    {findingMemos.length === 0 && !isCreatingFinding && (
+                                        <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-lg">
+                                            No findings recorded yet. Start by creating one.
                                         </div>
                                     )}
-                                </Card>
-                            ))}
-                        </div>
+                                    {findingMemos.map(finding => (
+                                        <Card key={finding.id} className="bg-zinc-900/30 border-zinc-800 hover:border-zinc-700 transition-colors">
+                                            {editingFindingId === finding.id ? (
+                                                // Edit Mode
+                                                <div className="p-4 space-y-4">
+                                                    <Input 
+                                                        defaultValue={finding.title}
+                                                        onChange={(e) => finding.title = e.target.value} // Temporary mutation
+                                                        className="bg-zinc-950 border-zinc-700 font-bold"
+                                                    />
+                                                    <textarea 
+                                                        defaultValue={finding.content}
+                                                        onChange={(e) => finding.content = e.target.value}
+                                                        className="w-full h-32 bg-zinc-900 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none"
+                                                    />
+                                                    
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-bold uppercase text-zinc-500">Related Categories</label>
+                                                        <div className="flex flex-wrap gap-2 p-2 bg-zinc-950/50 rounded border border-zinc-800">
+                                                            {categories.map(cat => (
+                                                                <React.Fragment key={cat.id}>
+                                                                <Badge 
+                                                                    variant={editingFindingCategoryIds.includes(cat.id) ? "default" : "outline"}
+                                                                    className="cursor-pointer"
+                                                                    onClick={() => toggleEditingFindingCategory(cat.id)}
+                                                                    style={editingFindingCategoryIds.includes(cat.id) ? { backgroundColor: cat.color } : { color: cat.color, borderColor: cat.color }}
+                                                                >
+                                                                    {editingFindingCategoryIds.includes(cat.id) && <CheckCircle2 size={10} className="mr-1 inline" />}
+                                                                    {cat.name}
+                                                                </Badge>
+                                                                </React.Fragment>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button variant="ghost" size="sm" onClick={() => setEditingFindingId(null)}>Cancel</Button>
+                                                        <Button variant="brand" size="sm" onClick={() => {
+                                                            const otherIds = finding.relatedIds.filter(id => !categories.some(c => c.id === id));
+                                                            const newRelatedIds = [...otherIds, ...editingFindingCategoryIds];
+                                                            
+                                                            onUpdateMemo(finding.id, { 
+                                                                title: finding.title, 
+                                                                content: finding.content,
+                                                                relatedIds: newRelatedIds
+                                                            });
+                                                            setEditingFindingId(null);
+                                                        }}>
+                                                            <Save size={14} className="mr-2"/> Save
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                // View Mode
+                                                <div className="p-4 flex flex-col gap-2">
+                                                    <div className="flex justify-between items-start">
+                                                        <h3 className="font-bold text-zinc-200">{finding.title}</h3>
+                                                        <div className="flex gap-1">
+                                                            <Button size="icon" variant="ghost" onClick={() => startEditingFinding(finding)} className="h-8 w-8 text-zinc-500 hover:text-white">
+                                                                <Edit size={14} />
+                                                            </Button>
+                                                            <Button size="icon" variant="ghost" onClick={() => onDeleteMemo && onDeleteMemo(finding.id)} className="h-8 w-8 text-zinc-500 hover:text-red-500">
+                                                                <Trash2 size={14} />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                                                        {finding.content}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800/50 flex-wrap">
+                                                        <span className="text-[10px] text-zinc-600 font-mono">ID: {finding.id}</span>
+                                                        <div className="flex flex-wrap gap-1 ml-auto">
+                                                            {finding.relatedIds.length > 0 ? (
+                                                                finding.relatedIds.map(rid => {
+                                                                    const linkedCat = categories.find(c => c.id === rid);
+                                                                    if (linkedCat) {
+                                                                        return (
+                                                                            <React.Fragment key={rid}>
+                                                                            <Badge variant="outline" className="text-[10px] h-5 border-zinc-700 bg-zinc-900/50" style={{ color: linkedCat.color, borderColor: linkedCat.color + '40' }}>
+                                                                                <div className="w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: linkedCat.color }} />
+                                                                                {linkedCat.name}
+                                                                            </Badge>
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    }
+                                                                    const linkedRQ = researchQuestions.find(rq => rq.id === rid);
+                                                                    if (linkedRQ) {
+                                                                        return (
+                                                                            <React.Fragment key={rid}>
+                                                                                <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-zinc-800 text-zinc-400 gap-1">
+                                                                                    <GitBranch size={8} /> RQ Answer
+                                                                                </Badge>
+                                                                            </React.Fragment>
+                                                                        )
+                                                                    }
+                                                                    return null;
+                                                                })
+                                                            ) : (
+                                                                <Badge variant="outline" className="text-[10px] h-5 border-amber-900 text-amber-600">Unmapped</Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </Card>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            // BOARD VIEW (MAPPER)
+                            <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
+                                <div className="flex gap-4 h-full min-w-max">
+                                    {/* Unmapped Column */}
+                                    <div className="w-72 flex flex-col bg-zinc-900/20 rounded-lg border border-zinc-800/50">
+                                        <div className="p-3 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
+                                            <h3 className="font-semibold text-zinc-400 text-sm flex items-center gap-2">
+                                                <AlertCircle size={14} className="text-amber-500" /> Unmapped Findings
+                                            </h3>
+                                        </div>
+                                        <div className="p-3 space-y-2 overflow-y-auto flex-1">
+                                            {findingMemos.filter(m => (!m.relatedIds || m.relatedIds.length === 0 || !researchQuestions.some(rq => m.relatedIds.includes(rq.id)))).map(memo => (
+                                                <MemoCard key={memo.id} memo={memo} codes={codes} onDragStart={handleDragStart} />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* RQ Columns */}
+                                    {researchQuestions.map((rq, idx) => (
+                                        <div 
+                                            key={rq.id} 
+                                            className="w-80 flex flex-col bg-zinc-900 rounded-lg border border-zinc-800 shadow-sm"
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={(e) => handleDrop(e, rq.id)}
+                                        >
+                                            <div className="p-3 border-b border-zinc-800 bg-zinc-950 rounded-t-lg">
+                                                <div className="text-[10px] text-zinc-500 font-mono mb-1">RQ-{idx + 1}</div>
+                                                <h3 className="font-medium text-zinc-200 text-sm line-clamp-2 leading-snug" title={rq.content}>
+                                                    {rq.content}
+                                                </h3>
+                                            </div>
+                                            <div className="p-3 space-y-2 overflow-y-auto flex-1 bg-zinc-900/50">
+                                                {getFindingsForRQ(rq.id).map(memo => (
+                                                    <MemoCard key={memo.id} memo={memo} codes={codes} onDragStart={handleDragStart} isLinked />
+                                                ))}
+                                                {getFindingsForRQ(rq.id).length === 0 && (
+                                                    <div className="h-24 border-2 border-dashed border-zinc-800 rounded flex items-center justify-center text-zinc-600 text-xs text-center p-4">
+                                                        Drag findings here to map to RQ
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -617,4 +724,50 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
         </div>
     </div>
   );
+};
+
+interface MemoCardProps {
+    memo: Memo;
+    codes: Code[];
+    onDragStart: (e: React.DragEvent, id: string) => void;
+    isLinked?: boolean;
+}
+
+const MemoCard: React.FC<MemoCardProps> = ({ memo, codes, onDragStart, isLinked }) => {
+    // Find related codes to display on the card
+    const relatedCodes = codes.filter(c => memo.relatedIds.includes(c.id) || memo.content.toLowerCase().includes(c.name.toLowerCase()));
+
+    return (
+        <div 
+            draggable
+            onDragStart={(e) => onDragStart(e, memo.id)}
+            className={cn(
+                "p-3 rounded border cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative flex flex-col gap-2",
+                isLinked ? "bg-zinc-800 border-zinc-700" : "bg-zinc-950 border-zinc-800"
+            )}
+        >
+            <div className="flex justify-between items-start">
+                <h4 className="text-xs font-bold text-zinc-300 line-clamp-1">{memo.title}</h4>
+                {isLinked && <LinkIcon size={10} className="text-blue-500" />}
+            </div>
+            
+            <p className="text-[10px] text-zinc-500 line-clamp-3 leading-relaxed">
+                {memo.content}
+            </p>
+
+            {/* Tags area */}
+            <div className="flex flex-wrap gap-1 mt-1">
+                <Badge variant="secondary" className="text-[8px] h-4 px-1">{memo.type}</Badge>
+                {relatedCodes.slice(0, 3).map(c => (
+                    <React.Fragment key={c.id}>
+                    <Badge variant="outline" className="text-[8px] h-4 px-1 border-zinc-700 text-zinc-400 gap-1">
+                        <div className="w-1 h-1 rounded-full" style={{ backgroundColor: c.color }}/>
+                        {c.name}
+                    </Badge>
+                    </React.Fragment>
+                ))}
+                {relatedCodes.length > 3 && <span className="text-[8px] text-zinc-600">+{relatedCodes.length - 3}</span>}
+            </div>
+        </div>
+    );
 };

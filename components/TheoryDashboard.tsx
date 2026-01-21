@@ -3,16 +3,10 @@ import { ResearchQuestion, Memo, Code } from '../types';
 import { 
   LayoutDashboard, 
   Table2, 
-  Kanban, 
   Target, 
   FileText, 
   Filter, 
   CheckCircle2, 
-  AlertCircle,
-  Link as LinkIcon,
-  Tag,
-  ArrowRight,
-  GitBranch
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -26,7 +20,7 @@ interface TheoryDashboardProps {
   onUpdateMemo: (id: string, updates: Partial<Memo>) => void;
 }
 
-type ViewMode = 'dashboard' | 'matrix' | 'board';
+type ViewMode = 'dashboard' | 'matrix';
 
 export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({ 
   researchQuestions, 
@@ -64,24 +58,6 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
       return { totalRQs, coveredRQs, totalFindings, categoryCounts };
   }, [researchQuestions, memos, categories]);
 
-  // --- Drag and Drop Logic ---
-  const handleDragStart = (e: React.DragEvent, memoId: string) => {
-      e.dataTransfer.setData('memoId', memoId);
-  };
-
-  const handleDrop = (e: React.DragEvent, rqId: string) => {
-      e.preventDefault();
-      const memoId = e.dataTransfer.getData('memoId');
-      const memo = memos.find(m => m.id === memoId);
-      
-      if (memo) {
-          const currentRelated = memo.relatedIds || [];
-          if (!currentRelated.includes(rqId)) {
-              onUpdateMemo(memoId, { relatedIds: [...currentRelated, rqId] });
-          }
-      }
-  };
-
   return (
     <div className="space-y-6 h-full flex flex-col">
         {/* Toolbar */}
@@ -94,14 +70,6 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
                     className="gap-2"
                 >
                     <LayoutDashboard size={14} /> Overview
-                </Button>
-                <Button 
-                    variant={viewMode === 'board' ? 'secondary' : 'ghost'} 
-                    size="sm" 
-                    onClick={() => setViewMode('board')}
-                    className="gap-2 text-blue-400"
-                >
-                    <GitBranch size={14} /> Findings Mapper
                 </Button>
                 <Button 
                     variant={viewMode === 'matrix' ? 'secondary' : 'ghost'} 
@@ -291,54 +259,6 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
             </div>
         )}
 
-        {/* --- VIEW: BOARD (FINDING MAPPER) --- */}
-        {viewMode === 'board' && (
-            <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-                <div className="flex gap-4 h-full min-w-max">
-                    {/* Unmapped Column */}
-                    <div className="w-72 flex flex-col bg-zinc-900/20 rounded-lg border border-zinc-800/50">
-                        <div className="p-3 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
-                            <h3 className="font-semibold text-zinc-400 text-sm flex items-center gap-2">
-                                <AlertCircle size={14} className="text-amber-500" /> Unmapped Findings
-                            </h3>
-                        </div>
-                        <div className="p-3 space-y-2 overflow-y-auto flex-1">
-                            {memos.filter(m => (!m.relatedIds || m.relatedIds.length === 0 || !researchQuestions.some(rq => m.relatedIds.includes(rq.id)))).map(memo => (
-                                <MemoCard key={memo.id} memo={memo} codes={codes} onDragStart={handleDragStart} />
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* RQ Columns */}
-                    {researchQuestions.map((rq, idx) => (
-                        <div 
-                            key={rq.id} 
-                            className="w-80 flex flex-col bg-zinc-900 rounded-lg border border-zinc-800 shadow-sm"
-                            onDragOver={(e) => e.preventDefault()}
-                            onDrop={(e) => handleDrop(e, rq.id)}
-                        >
-                            <div className="p-3 border-b border-zinc-800 bg-zinc-950 rounded-t-lg">
-                                <div className="text-[10px] text-zinc-500 font-mono mb-1">RQ-{idx + 1}</div>
-                                <h3 className="font-medium text-zinc-200 text-sm line-clamp-2 leading-snug" title={rq.content}>
-                                    {rq.content}
-                                </h3>
-                            </div>
-                            <div className="p-3 space-y-2 overflow-y-auto flex-1 bg-zinc-900/50">
-                                {getFindingsForRQ(rq.id).map(memo => (
-                                    <MemoCard key={memo.id} memo={memo} codes={codes} onDragStart={handleDragStart} isLinked />
-                                ))}
-                                {getFindingsForRQ(rq.id).length === 0 && (
-                                    <div className="h-24 border-2 border-dashed border-zinc-800 rounded flex items-center justify-center text-zinc-600 text-xs text-center p-4">
-                                        Drag findings here to map to RQ
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-
         {/* --- VIEW: MATRIX (HEATMAP) --- */}
         {viewMode === 'matrix' && (
             <div className="flex-1 overflow-auto bg-zinc-900/30 rounded-lg border border-zinc-800 p-6">
@@ -397,50 +317,4 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
         )}
     </div>
   );
-};
-
-interface MemoCardProps {
-    memo: Memo;
-    codes: Code[];
-    onDragStart: (e: React.DragEvent, id: string) => void;
-    isLinked?: boolean;
-}
-
-const MemoCard: React.FC<MemoCardProps> = ({ memo, codes, onDragStart, isLinked }) => {
-    // Find related codes to display on the card
-    const relatedCodes = codes.filter(c => memo.relatedIds.includes(c.id) || memo.content.toLowerCase().includes(c.name.toLowerCase()));
-
-    return (
-        <div 
-            draggable
-            onDragStart={(e) => onDragStart(e, memo.id)}
-            className={cn(
-                "p-3 rounded border cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative flex flex-col gap-2",
-                isLinked ? "bg-zinc-800 border-zinc-700" : "bg-zinc-950 border-zinc-800"
-            )}
-        >
-            <div className="flex justify-between items-start">
-                <h4 className="text-xs font-bold text-zinc-300 line-clamp-1">{memo.title}</h4>
-                {isLinked && <LinkIcon size={10} className="text-blue-500" />}
-            </div>
-            
-            <p className="text-[10px] text-zinc-500 line-clamp-3 leading-relaxed">
-                {memo.content}
-            </p>
-
-            {/* Tags area */}
-            <div className="flex flex-wrap gap-1 mt-1">
-                <Badge variant="secondary" className="text-[8px] h-4 px-1">{memo.type}</Badge>
-                {relatedCodes.slice(0, 3).map(c => (
-                    <React.Fragment key={c.id}>
-                    <Badge variant="outline" className="text-[8px] h-4 px-1 border-zinc-700 text-zinc-400 gap-1">
-                        <div className="w-1 h-1 rounded-full" style={{ backgroundColor: c.color }}/>
-                        {c.name}
-                    </Badge>
-                    </React.Fragment>
-                ))}
-                {relatedCodes.length > 3 && <span className="text-[8px] text-zinc-600">+{relatedCodes.length - 3}</span>}
-            </div>
-        </div>
-    );
 };
