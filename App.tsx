@@ -193,6 +193,11 @@ export default function App() {
       }
   };
 
+  const handleUpdateMemo = (id: string, content: string) => {
+    setMemos(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+    addJournalEntry(`Updated annotation ${id}`, 'manual');
+  };
+
   const handleAddTheoryMemo = (title: string, content: string) => {
       const newMemo: Memo = {
           id: `tmemo-${Date.now()}`,
@@ -312,7 +317,7 @@ export default function App() {
                                 onAddCoding={handleAddCoding}
                                 onCreateCode={handleCreateCode}
                                 onAddMemo={handleAddMemo}
-                                onUpdateContent={(content) => handleUpdateArtifact(activeArtifact.id, { content })}
+                                onUpdateMemo={handleUpdateMemo}
                             />
                             )}
 
