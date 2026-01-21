@@ -425,6 +425,13 @@ export default function App() {
     if (typeof updates === 'string') addJournalEntry(`Updated annotation ${id}`, 'manual');
   };
 
+  const handleDeleteMemo = (id: string) => {
+      if(confirm('Delete this memo/finding?')) {
+          setMemos(prev => prev.filter(m => m.id !== id));
+          addJournalEntry(`Deleted memo ${id}`, 'manual');
+      }
+  };
+
   const handleAddTheoryMemo = (title: string, content: string) => {
       const newMemo: Memo = {
           id: `tmemo-${Date.now()}`,
@@ -439,6 +446,21 @@ export default function App() {
       setMemos(prev => [...prev, newMemo]);
       setTheoryArtefact(prev => ({ ...prev, content: content }));
       addJournalEntry(`Updated Theory Artefact Content: ${title}`, 'auto');
+  };
+
+  const handleAddFinding = (title: string, content: string) => {
+      const newMemo: Memo = {
+          id: `finding-${Date.now()}`,
+          title,
+          content,
+          relatedIds: [],
+          createdAt: new Date().toISOString(),
+          type: 'finding',
+          number: memos.length + 1,
+          authorId: activeResearcherId
+      };
+      setMemos(prev => [...prev, newMemo]);
+      addJournalEntry(`Recorded new finding: ${title}`, 'auto');
   };
 
   const handleSetCoreCategory = (codeId: string) => {
@@ -663,7 +685,9 @@ export default function App() {
                         researchQuestions={projectSettings.theoreticalFramework.researchQuestions}
                         onSetCoreCategory={handleSetCoreCategory}
                         onAddMemo={handleAddTheoryMemo}
+                        onAddFinding={handleAddFinding}
                         onUpdateMemo={handleUpdateMemo}
+                        onDeleteMemo={handleDeleteMemo}
                         theoryArtefact={theoryArtefact}
                         onCreateCode={handleCreateCode}
                         settings={projectSettings} // Pass settings

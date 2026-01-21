@@ -17,7 +17,12 @@ import {
     StickyNote,
     Lightbulb,
     Plus,
-    Network
+    Network,
+    Table,
+    Edit,
+    Trash2,
+    Save,
+    X
 } from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
@@ -37,7 +42,9 @@ interface TheoryBuilderProps {
   researchQuestions: ResearchQuestion[];
   onSetCoreCategory: (codeId: string) => void;
   onAddMemo: (title: string, content: string) => void;
+  onAddFinding?: (title: string, content: string) => void;
   onUpdateMemo: (id: string, updates: Partial<Memo>) => void;
+  onDeleteMemo?: (id: string) => void;
   onCreateCode: (name: string, kind: 'code' | 'category') => void;
   theoryArtefact: Theory; 
   settings?: ProjectSettings; // Added prop
@@ -52,7 +59,9 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     researchQuestions,
     onSetCoreCategory, 
     onAddMemo, 
+    onAddFinding,
     onUpdateMemo,
+    onDeleteMemo,
     onCreateCode,
     theoryArtefact,
     settings,
@@ -63,9 +72,16 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   const [activeView, setActiveView] = useState('model');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [dirSearch, setDirSearch] = useState('');
+  
+  // Findings State
+  const [isCreatingFinding, setIsCreatingFinding] = useState(false);
+  const [newFindingTitle, setNewFindingTitle] = useState('');
+  const [newFindingContent, setNewFindingContent] = useState('');
+  const [editingFindingId, setEditingFindingId] = useState<string | null>(null);
 
   const coreCode = codes.find(c => c.id === selectedCoreId);
   const categories = codes.filter(c => c.kind === 'category');
+  const findingMemos = useMemo(() => memos.filter(m => m.type === 'finding'), [memos]);
 
   // Directory Filtering
   const filteredCategories = useMemo(() => {
@@ -126,6 +142,15 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
       }
   };
 
+  const submitNewFinding = () => {
+      if (newFindingTitle && newFindingContent && onAddFinding) {
+          onAddFinding(newFindingTitle, newFindingContent);
+          setNewFindingTitle('');
+          setNewFindingContent('');
+          setIsCreatingFinding(false);
+      }
+  };
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 overflow-hidden">
         {/* Sub-Navigation for Theory Area */}
@@ -134,6 +159,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                 <Tabs value={activeView} onValueChange={setActiveView}>
                     <TabsList className="bg-zinc-900 border border-zinc-800">
                         <TabsTrigger value="model" className="text-xs gap-2"><Network size={12}/> Framework Model</TabsTrigger>
+                        <TabsTrigger value="findings" className="text-xs gap-2"><Lightbulb size={12}/> Findings Manager</TabsTrigger>
                         <TabsTrigger value="dashboard" className="text-xs gap-2"><Layout size={12}/> Integration Dashboard</TabsTrigger>
                         <TabsTrigger value="narrative" className="text-xs gap-2"><BookOpen size={12}/> Narrative Builder</TabsTrigger>
                     </TabsList>
@@ -160,6 +186,123 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                         onOpenSettings={onOpenSettings || (() => {})}
                         onSelectMemo={() => {}} // Placeholder logic
                     />
+                </div>
+            )}
+
+            {/* VIEW: FINDINGS MANAGER (CRUD) */}
+            {activeView === 'findings' && (
+                <div className="h-full w-full animate-in fade-in duration-300 p-8 overflow-y-auto">
+                    <div className="max-w-5xl mx-auto space-y-6">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold text-zinc-100 flex items-center gap-2">
+                                    <Lightbulb size={20} className="text-amber-500" />
+                                    Emergent Findings
+                                </h2>
+                                <p className="text-sm text-zinc-500">Manage key theoretical insights derived from data.</p>
+                            </div>
+                            <Button 
+                                onClick={() => setIsCreatingFinding(true)}
+                                className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+                            >
+                                <Plus size={16} /> New Finding
+                            </Button>
+                        </div>
+
+                        {/* Create Form */}
+                        {isCreatingFinding && (
+                            <Card className="border-amber-900/50 bg-amber-950/10 animate-in slide-in-from-top-2">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-medium text-amber-500 uppercase">Draft New Finding</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <Input 
+                                        placeholder="Finding Title (e.g., 'The Paradox of Autonomy')" 
+                                        value={newFindingTitle}
+                                        onChange={(e) => setNewFindingTitle(e.target.value)}
+                                        className="bg-zinc-900 border-zinc-700"
+                                    />
+                                    <textarea 
+                                        placeholder="Describe the finding..."
+                                        value={newFindingContent}
+                                        onChange={(e) => setNewFindingContent(e.target.value)}
+                                        className="w-full h-32 bg-zinc-900 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                </CardContent>
+                                <CardFooter className="flex justify-end gap-2 border-t border-zinc-800/50 pt-4">
+                                    <Button variant="ghost" onClick={() => setIsCreatingFinding(false)}>Cancel</Button>
+                                    <Button variant="brand" onClick={submitNewFinding} disabled={!newFindingTitle || !newFindingContent}>Save Finding</Button>
+                                </CardFooter>
+                            </Card>
+                        )}
+
+                        {/* Findings List */}
+                        <div className="grid gap-4">
+                            {findingMemos.length === 0 && !isCreatingFinding && (
+                                <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-lg">
+                                    No findings recorded yet. Start by creating one.
+                                </div>
+                            )}
+                            {findingMemos.map(finding => (
+                                <Card key={finding.id} className="bg-zinc-900/30 border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    {editingFindingId === finding.id ? (
+                                        // Edit Mode
+                                        <div className="p-4 space-y-4">
+                                            <Input 
+                                                defaultValue={finding.title}
+                                                onChange={(e) => finding.title = e.target.value} // Temporary mutation for this interaction
+                                                className="bg-zinc-950 border-zinc-700 font-bold"
+                                            />
+                                            <textarea 
+                                                defaultValue={finding.content}
+                                                onChange={(e) => finding.content = e.target.value}
+                                                className="w-full h-32 bg-zinc-950 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none"
+                                            />
+                                            <div className="flex justify-end gap-2">
+                                                <Button variant="ghost" size="sm" onClick={() => setEditingFindingId(null)}>Cancel</Button>
+                                                <Button variant="brand" size="sm" onClick={() => {
+                                                    onUpdateMemo(finding.id, { title: finding.title, content: finding.content });
+                                                    setEditingFindingId(null);
+                                                }}>
+                                                    <Save size={14} className="mr-2"/> Save
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        // View Mode
+                                        <div className="p-4 flex flex-col gap-2">
+                                            <div className="flex justify-between items-start">
+                                                <h3 className="font-bold text-zinc-200">{finding.title}</h3>
+                                                <div className="flex gap-1">
+                                                    <Button size="icon" variant="ghost" onClick={() => setEditingFindingId(finding.id)} className="h-8 w-8 text-zinc-500 hover:text-white">
+                                                        <Edit size={14} />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" onClick={() => onDeleteMemo && onDeleteMemo(finding.id)} className="h-8 w-8 text-zinc-500 hover:text-red-500">
+                                                        <Trash2 size={14} />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <p className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                                                {finding.content}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800/50">
+                                                <span className="text-[10px] text-zinc-600 font-mono">ID: {finding.id}</span>
+                                                <div className="flex gap-1 ml-auto">
+                                                    {finding.relatedIds.length > 0 ? (
+                                                        <Badge variant="secondary" className="text-[10px] h-5 bg-zinc-800 text-zinc-400">
+                                                            {finding.relatedIds.length} Linked Items
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-[10px] h-5 border-amber-900 text-amber-600">Unmapped</Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             )}
 
