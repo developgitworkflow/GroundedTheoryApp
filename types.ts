@@ -3,11 +3,23 @@ export interface Project {
   name: string;
 }
 
+export type LifecycleStatus = 'inbox' | 'appraisal' | 'active' | 'archived' | 'disposed';
+
+export interface CurationMetadata {
+  format: string; // Representation Information
+  source: string; // Provenance
+  dateCreated: string;
+  consentObtained: boolean; // Legal/Ethical preservation
+  preservationNotes?: string;
+}
+
 export interface Artifact {
   id: string;
   name: string;
   content: string;
   type: 'interview' | 'observation' | 'document';
+  status: LifecycleStatus;
+  curation: CurationMetadata;
 }
 
 export interface Code {
@@ -16,6 +28,7 @@ export interface Code {
   color: string;
   description?: string;
   parentId?: string; // For hierarchical/axial coding
+  isCore?: boolean; // The central phenomenon in the curated model
 }
 
 export interface Coding {
@@ -33,6 +46,14 @@ export interface Memo {
   content: string;
   relatedIds: string[]; // Can relate to Artifact, Code, or Coding
   createdAt: string;
+  type: 'theoretical' | 'procedural' | 'observational';
+}
+
+export interface JournalEntry {
+  id: string;
+  timestamp: string;
+  content: string;
+  type: 'auto' | 'manual';
 }
 
 export interface LayerConfig {
