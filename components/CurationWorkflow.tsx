@@ -27,7 +27,12 @@ import {
   Table2,
   Lock,
   Globe,
-  Hash
+  Hash,
+  Lightbulb,
+  Download,
+  Microscope,
+  Megaphone,
+  FolderCog
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -40,10 +45,42 @@ interface CurationWorkflowProps {
   researchers: Researcher[];
 }
 
-const COLUMNS: { id: TypeOfStatus; label: string; icon: React.ElementType; color: string }[] = [
-  { id: 'pending', label: 'Pending (Inbox)', icon: Inbox, color: 'text-zinc-400' },
-  { id: 'in progress', label: 'In Progress (Appraisal)', icon: SearchCheck, color: 'text-blue-400' },
-  { id: 'complete', label: 'Complete (Active)', icon: Database, color: 'text-emerald-400' },
+const COLUMNS: { id: TypeOfStatus; label: string; subLabel: string; icon: React.ElementType; color: string }[] = [
+  { 
+      id: 'problem_statement', 
+      label: 'Phase I - Problem Statement', 
+      subLabel: 'Questions, Hypothesis, Methods',
+      icon: Lightbulb, 
+      color: 'text-amber-400' 
+  },
+  { 
+      id: 'acquisition', 
+      label: 'Phase II - Data Acquisition', 
+      subLabel: 'Collect, Explore, Clean',
+      icon: Download, 
+      color: 'text-blue-400' 
+  },
+  { 
+      id: 'management', 
+      label: 'Phase III - Data Management', 
+      subLabel: 'Evaluate, Contextualize',
+      icon: FolderCog, 
+      color: 'text-indigo-400' 
+  },
+  { 
+      id: 'analysis', 
+      label: 'Phase IV - Analysis', 
+      subLabel: 'Experiments, Debate, Reflect',
+      icon: Microscope, 
+      color: 'text-purple-400' 
+  },
+  { 
+      id: 'report', 
+      label: 'Phase V - Report', 
+      subLabel: 'Visualize, Evaluate, Publish',
+      icon: FileText, 
+      color: 'text-emerald-400' 
+  },
 ];
 
 export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({ 
@@ -87,8 +124,8 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
       {/* Board Header */}
       <div className="h-14 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-950 shrink-0">
         <div className="flex items-center gap-2">
-           <h2 className="font-semibold text-zinc-100">Curation Board</h2>
-           <Badge variant="outline" className="text-zinc-500 border-zinc-700 ml-2">Kanban View</Badge>
+           <h2 className="font-semibold text-zinc-100">Research Lifecycle Board</h2>
+           <Badge variant="outline" className="text-zinc-500 border-zinc-700 ml-2">5-Phase Flow</Badge>
         </div>
         <Button onClick={onCreateArtifact} size="sm" variant="brand" className="gap-2">
             <Plus size={16} /> New Item
@@ -97,24 +134,27 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
 
       {/* Board Canvas */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
-        <div className="flex h-full gap-4 min-w-[1000px]">
+        <div className="flex h-full gap-4 min-w-[1400px]">
           {COLUMNS.map(col => (
             <div 
                 key={col.id} 
-                className="flex-1 flex flex-col min-w-[280px] max-w-[360px] bg-zinc-900/30 rounded-lg border border-zinc-800/50"
+                className="flex-1 flex flex-col min-w-[260px] max-w-[320px] bg-zinc-900/30 rounded-lg border border-zinc-800/50"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id)}
             >
               {/* Column Header */}
-              <div className="p-3 flex items-center justify-between border-b border-zinc-800/50 bg-zinc-900/50 rounded-t-lg">
-                 <div className="flex items-center gap-2">
-                    <col.icon size={16} className={col.color} />
-                    <span className="font-medium text-sm text-zinc-200">{col.label}</span>
-                    <Badge variant="secondary" className="bg-zinc-800 text-zinc-500 text-[10px] px-1.5 h-5 min-w-[20px] justify-center">
+              <div className="p-3 border-b border-zinc-800/50 bg-zinc-900/50 rounded-t-lg">
+                 <div className="flex items-center justify-between mb-1">
+                     <div className="flex items-center gap-2">
+                        <col.icon size={16} className={col.color} />
+                        <span className="font-semibold text-sm text-zinc-200">{col.label.split(' - ')[0]}</span>
+                     </div>
+                     <Badge variant="secondary" className="bg-zinc-800 text-zinc-500 text-[10px] px-1.5 h-5 min-w-[20px] justify-center">
                         {artifacts.filter(a => a.status === col.id).length}
                     </Badge>
                  </div>
-                 <MoreHorizontal size={14} className="text-zinc-600 cursor-pointer hover:text-zinc-400" />
+                 <div className="text-xs font-bold text-zinc-400 pl-6 mb-0.5">{col.label.split(' - ')[1]}</div>
+                 <div className="text-[10px] text-zinc-600 pl-6 truncate">{col.subLabel}</div>
               </div>
 
               {/* Drop Zone / List */}
@@ -169,8 +209,8 @@ const WorkflowCard: React.FC<{
     participant?: Participant;
 }> = ({ artifact, onClick, onDragStart, participant }) => {
     
-    // Check for "Complete" validity
-    const isMissingMeta = artifact.status === 'complete' && (!artifact.curation.consentObtained || !artifact.curation.format);
+    // Check for "Analysis" validity
+    const isMissingMeta = (artifact.status === 'analysis' || artifact.status === 'report') && (!artifact.curation.consentObtained || !artifact.curation.format);
 
     const MediaIcon = () => {
         switch(artifact.media) {
@@ -198,7 +238,7 @@ const WorkflowCard: React.FC<{
                     {artifact.access === 'private' ? <Lock size={10} className="text-amber-500/50" /> : <Globe size={10} className="text-blue-500/50" />}
                  </div>
                  {isMissingMeta && (
-                     <div title="Missing Metadata">
+                     <div title="Missing Metadata for Analysis">
                         <AlertTriangle size={14} className="text-amber-500" />
                      </div>
                  )}
@@ -241,6 +281,17 @@ const CurationSidePanel: React.FC<{
         onUpdate({ curation: meta });
     };
 
+    const getStatusColor = (status: TypeOfStatus) => {
+        switch(status) {
+            case 'problem_statement': return "bg-amber-500/10 text-amber-500";
+            case 'acquisition': return "bg-blue-500/10 text-blue-500";
+            case 'management': return "bg-indigo-500/10 text-indigo-500";
+            case 'analysis': return "bg-purple-500/10 text-purple-500";
+            case 'report': return "bg-emerald-500/10 text-emerald-500";
+            default: return "bg-zinc-800 text-zinc-400";
+        }
+    };
+
     return (
         <div className="absolute top-0 right-0 bottom-0 w-[400px] bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200 z-50">
             {/* Header */}
@@ -259,11 +310,8 @@ const CurationSidePanel: React.FC<{
                 <div>
                     <h2 className="text-xl font-bold text-zinc-100 mb-1">{artifact.name}</h2>
                     <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className={cn(
-                            "capitalize",
-                            artifact.status === 'complete' ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-800 text-zinc-400"
-                        )}>
-                            {artifact.status}
+                        <Badge variant="secondary" className={cn("capitalize", getStatusColor(artifact.status))}>
+                            {artifact.status.replace('_', ' ')}
                         </Badge>
                     </div>
                 </div>

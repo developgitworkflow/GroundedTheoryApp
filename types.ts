@@ -7,7 +7,7 @@ export interface Project {
 // Updated Enums based on requirements
 export type TypeOfMedia = 'video' | 'text' | 'audio' | 'dataset' | 'software';
 export type TypeOfAccess = 'public' | 'private';
-export type TypeOfStatus = 'pending' | 'in progress' | 'complete';
+export type TypeOfStatus = 'problem_statement' | 'acquisition' | 'management' | 'analysis' | 'report';
 
 export interface CurationMetadata {
   format: string; // Representation Information

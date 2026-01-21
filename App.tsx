@@ -49,7 +49,7 @@ const INITIAL_ARTIFACTS: Artifact[] = [
         type: 'interview',
         media: 'text',
         access: 'private',
-        status: 'complete',
+        status: 'analysis',
         responsibleId: 'r1',
         curation: {
             format: 'Transcript (Markdown)',
@@ -74,7 +74,7 @@ Subject: Yeah. When I'm at home, I work harder because I'm grateful for the flex
         type: 'observation',
         media: 'text',
         access: 'private',
-        status: 'pending',
+        status: 'acquisition',
         responsibleId: 'r2',
         curation: {
             format: 'Field Notes',
@@ -298,8 +298,8 @@ export default function App() {
   // Curation Actions
   const handleUpdateArtifact = (id: string, updates: Partial<Artifact>) => {
       setArtifacts(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-      if (updates.status === 'complete') {
-          addJournalEntry(`Artifact marked as Complete: ${id}`, 'auto');
+      if (updates.status === 'analysis') {
+          addJournalEntry(`Artifact marked for Analysis: ${id}`, 'auto');
       } else if (updates.content) {
           addJournalEntry(`Updated content for artifact: ${id}`, 'auto');
       }
@@ -320,7 +320,7 @@ export default function App() {
           type: 'document',
           media: 'text',
           access: 'private',
-          status: 'pending',
+          status: 'acquisition',
           responsibleId: activeResearcherId,
           content: 'Raw content pending appraisal...',
           curation: {
@@ -331,7 +331,7 @@ export default function App() {
           }
       };
       setArtifacts(prev => [...prev, newArt]);
-      addJournalEntry(`Received new artifact into Inbox`, 'auto');
+      addJournalEntry(`Received new artifact into Data Acquisition`, 'auto');
   };
 
   // Analysis Actions
@@ -597,7 +597,7 @@ export default function App() {
                             onChange={(e) => setActiveArtifactId(e.target.value)}
                             className="bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 focus:outline-none"
                         >
-                            {artifacts.filter(a => a.status === 'complete').map(a => (
+                            {artifacts.filter(a => a.status === 'analysis' || a.status === 'report').map(a => (
                                 <option key={a.id} value={a.id}>{a.name}</option>
                             ))}
                         </select>
@@ -628,7 +628,7 @@ export default function App() {
                 {/* 2. TEXT ANALYSIS */}
                 <TabsContent value="analyze" className="flex-1 h-full mt-0 relative data-[state=inactive]:hidden">
                     {/* Content Layers */}
-                    {activeArtifact && activeArtifact.status === 'complete' ? (
+                    {activeArtifact && (activeArtifact.status === 'analysis' || activeArtifact.status === 'report') ? (
                         <>
                             {layersVisible[LayerType.ARTIFACT] && (
                             <ArtifactView 
@@ -662,7 +662,7 @@ export default function App() {
                     ) : (
                          <div className="flex items-center justify-center h-full text-zinc-500 flex-col gap-2">
                             <FilePlus size={48} className="opacity-20" />
-                            <p>Select an active (complete) artifact from the top bar or Ingest more data in the Curation tab.</p>
+                            <p>Select an active artifact (in Analysis Phase) from the top bar or Ingest more data in the Curation tab.</p>
                          </div>
                     )}
                 </TabsContent>
