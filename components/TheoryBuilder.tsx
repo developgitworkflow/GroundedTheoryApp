@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact } from '../types';
+import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact, ProjectSettings } from '../types';
 import { 
     Crown, 
     Sparkles, 
@@ -16,7 +16,8 @@ import {
     ChevronDown, 
     StickyNote,
     Lightbulb,
-    Plus
+    Plus,
+    Network
 } from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
@@ -26,6 +27,7 @@ import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 import { TheoryDashboard } from './TheoryDashboard';
+import { FrameworkDiagram } from './FrameworkDiagram';
 
 interface TheoryBuilderProps {
   codes: Code[];
@@ -38,6 +40,8 @@ interface TheoryBuilderProps {
   onUpdateMemo: (id: string, updates: Partial<Memo>) => void;
   onCreateCode: (name: string, kind: 'code' | 'category') => void;
   theoryArtefact: Theory; 
+  settings?: ProjectSettings; // Added prop
+  onOpenSettings?: () => void; // Added prop
 }
 
 export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({ 
@@ -50,11 +54,13 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     onAddMemo, 
     onUpdateMemo,
     onCreateCode,
-    theoryArtefact 
+    theoryArtefact,
+    settings,
+    onOpenSettings
 }) => {
   const [selectedCoreId, setSelectedCoreId] = useState<string>(codes.find(c => c.isCore)?.id || '');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [activeView, setActiveView] = useState('narrative');
+  const [activeView, setActiveView] = useState('model');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [dirSearch, setDirSearch] = useState('');
 
@@ -109,8 +115,6 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     const generated = await generateTheoreticalMemo([coreCode.name], context);
     if (generated) {
         onAddMemo(`Story Line: ${coreCode.name}`, generated);
-        // Also append to main content for flow
-        // onUpdateTheoryContent(theoryArtefact.content + "\n\n" + generated); // If we had that handler
     }
     setIsGenerating(false);
   };
@@ -129,8 +133,9 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
              <div className="flex items-center gap-4">
                 <Tabs value={activeView} onValueChange={setActiveView}>
                     <TabsList className="bg-zinc-900 border border-zinc-800">
-                        <TabsTrigger value="narrative" className="text-xs gap-2"><BookOpen size={12}/> Narrative Builder</TabsTrigger>
+                        <TabsTrigger value="model" className="text-xs gap-2"><Network size={12}/> Framework Model</TabsTrigger>
                         <TabsTrigger value="dashboard" className="text-xs gap-2"><Layout size={12}/> Integration Dashboard</TabsTrigger>
+                        <TabsTrigger value="narrative" className="text-xs gap-2"><BookOpen size={12}/> Narrative Builder</TabsTrigger>
                     </TabsList>
                 </Tabs>
              </div>
@@ -146,6 +151,18 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
 
         <div className="flex-1 overflow-hidden relative">
             
+            {/* VIEW 0: FRAMEWORK MODEL (New) */}
+            {activeView === 'model' && settings && (
+                <div className="h-full w-full animate-in fade-in duration-300">
+                    <FrameworkDiagram 
+                        settings={settings} 
+                        memos={memos} 
+                        onOpenSettings={onOpenSettings || (() => {})}
+                        onSelectMemo={() => {}} // Placeholder logic
+                    />
+                </div>
+            )}
+
             {/* VIEW 1: NARRATIVE BUILDER (3-Pane Layout) */}
             {activeView === 'narrative' && (
                 <div className="flex h-full w-full animate-in fade-in duration-300">

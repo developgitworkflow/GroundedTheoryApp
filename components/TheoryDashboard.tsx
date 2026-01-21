@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Link as LinkIcon,
   Tag,
-  ArrowRight
+  ArrowRight,
+  GitBranch
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -98,9 +99,9 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
                     variant={viewMode === 'board' ? 'secondary' : 'ghost'} 
                     size="sm" 
                     onClick={() => setViewMode('board')}
-                    className="gap-2"
+                    className="gap-2 text-blue-400"
                 >
-                    <Kanban size={14} /> Evidence Board
+                    <GitBranch size={14} /> Findings Mapper
                 </Button>
                 <Button 
                     variant={viewMode === 'matrix' ? 'secondary' : 'ghost'} 
@@ -290,7 +291,7 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
             </div>
         )}
 
-        {/* --- VIEW: BOARD (KANBAN) --- */}
+        {/* --- VIEW: BOARD (FINDING MAPPER) --- */}
         {viewMode === 'board' && (
             <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
                 <div className="flex gap-4 h-full min-w-max">
@@ -298,7 +299,7 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
                     <div className="w-72 flex flex-col bg-zinc-900/20 rounded-lg border border-zinc-800/50">
                         <div className="p-3 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
                             <h3 className="font-semibold text-zinc-400 text-sm flex items-center gap-2">
-                                <AlertCircle size={14} /> Unmapped Findings
+                                <AlertCircle size={14} className="text-amber-500" /> Unmapped Findings
                             </h3>
                         </div>
                         <div className="p-3 space-y-2 overflow-y-auto flex-1">
@@ -312,13 +313,13 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
                     {researchQuestions.map((rq, idx) => (
                         <div 
                             key={rq.id} 
-                            className="w-80 flex flex-col bg-zinc-900 rounded-lg border border-zinc-800"
+                            className="w-80 flex flex-col bg-zinc-900 rounded-lg border border-zinc-800 shadow-sm"
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={(e) => handleDrop(e, rq.id)}
                         >
                             <div className="p-3 border-b border-zinc-800 bg-zinc-950 rounded-t-lg">
                                 <div className="text-[10px] text-zinc-500 font-mono mb-1">RQ-{idx + 1}</div>
-                                <h3 className="font-medium text-zinc-200 text-sm line-clamp-2" title={rq.content}>
+                                <h3 className="font-medium text-zinc-200 text-sm line-clamp-2 leading-snug" title={rq.content}>
                                     {rq.content}
                                 </h3>
                             </div>
@@ -328,7 +329,7 @@ export const TheoryDashboard: React.FC<TheoryDashboardProps> = ({
                                 ))}
                                 {getFindingsForRQ(rq.id).length === 0 && (
                                     <div className="h-24 border-2 border-dashed border-zinc-800 rounded flex items-center justify-center text-zinc-600 text-xs text-center p-4">
-                                        Drag findings here to link evidence
+                                        Drag findings here to map to RQ
                                     </div>
                                 )}
                             </div>

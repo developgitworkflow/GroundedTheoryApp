@@ -8,7 +8,7 @@ import { CurationWorkflow } from './components/CurationWorkflow';
 import { MemoDirectory } from './components/MemoDirectory'; 
 import { SettingsDialog } from './components/SettingsDialog'; 
 import { Visualizations } from './components/Visualizations'; 
-import { OntologyManager } from './components/OntologyManager'; // New Import
+import { OntologyManager } from './components/OntologyManager'; 
 import { suggestOntology } from './services/geminiService'; 
 import { exportOntologyToOwl, parseOwlToCodes } from './lib/owlUtils'; 
 import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher, Vote, VoteStatus } from './types';
@@ -25,7 +25,6 @@ import {
   X
 } from 'lucide-react';
 
-// Design System Components
 import { Button } from './components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
@@ -36,7 +35,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from './components/ui/h
 const INITIAL_LAYERS: LayerConfig[] = [
   { id: LayerType.ARTIFACT, label: 'Artifact Source', visible: true, color: '#fff' },
   { id: LayerType.OPEN_CODING, label: 'Open Codes', visible: true, color: '#60a5fa' },
-  { id: LayerType.CATEGORIES, label: 'Categories', visible: false, color: '#fbbf24' }, // New Default
+  { id: LayerType.CATEGORIES, label: 'Categories', visible: false, color: '#fbbf24' }, 
   { id: LayerType.AXIAL_CONNECTIONS, label: 'Theory Network', visible: true, color: '#f472b6' },
   { id: LayerType.THEORY_MEMOS, label: 'Annotations', visible: false, color: '#fbbf24' },
 ];
@@ -86,7 +85,6 @@ Subject: Yeah. When I'm at home, I work harder because I'm grateful for the flex
     }
 ];
 
-// Initial Codes now distinguish between 'code' and 'category'
 const INITIAL_CODES: Code[] = [
   { id: 'c1', name: 'Betrayal', color: '#ef4444', kind: 'code', relatedCodeIds: [] }, 
   { id: 'c2', name: 'Autonomy', color: '#3b82f6', kind: 'code', relatedCodeIds: [] }, 
@@ -110,7 +108,6 @@ const INITIAL_SETTINGS: ProjectSettings = {
   stopWords: ["the", "and", "is", "of", "to", "in", "it", "that", "was"],
   theoryType: "constructivist",
   
-  // New Initial Data
   fieldOfStudy: {
       subjectOfStudy: 'Remote Employees',
       objectOfStudy: 'Impact of Return-to-Office Mandates',
@@ -169,20 +166,16 @@ export default function App() {
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('codes'); 
   
-  // File Import Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Settings State
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(INITIAL_SETTINGS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isElaborating, setIsElaborating] = useState(false);
 
-  // Team & Voting State
   const [researchTeam, setResearchTeam] = useState<ResearchTeam>(INITIAL_TEAM);
   const [activeResearcherId, setActiveResearcherId] = useState<string>(INITIAL_TEAM.researchers[0].id);
   const [votes, setVotes] = useState<Vote[]>([]); 
 
-  // Filter State
   const [codeFilter, setCodeFilter] = useState<string | null>(null);
 
   const activeResearcher = researchTeam.researchers.find(r => r.id === activeResearcherId) || researchTeam.researchers[0];
@@ -203,7 +196,6 @@ export default function App() {
     return acc;
   }, {} as Record<LayerType, boolean>);
   
-  // Helper to add log
   const addJournalEntry = (content: string, type: 'auto' | 'manual' = 'manual') => {
     const entry: JournalEntry = {
         id: `entry-${Date.now()}`,
@@ -219,7 +211,6 @@ export default function App() {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
   };
 
-  // Import / Export Logic
   const handleExportOwl = () => {
     const owlString = exportOntologyToOwl(codes, projectSettings.projectName);
     const blob = new Blob([owlString], { type: 'application/rdf+xml' });
@@ -273,7 +264,6 @@ export default function App() {
   };
 
 
-  // Voting Handler
   const handleVote = (criterionId: string, status: VoteStatus, comment?: string) => {
       setVotes(prev => {
           const filtered = prev.filter(v => 
@@ -295,7 +285,6 @@ export default function App() {
       addJournalEntry(`Voted '${status}' on criterion for artifact ${activeArtifactId}`, 'auto');
   };
 
-  // Curation Actions
   const handleUpdateArtifact = (id: string, updates: Partial<Artifact>) => {
       setArtifacts(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
       if (updates.status === 'analysis') {
@@ -334,7 +323,6 @@ export default function App() {
       addJournalEntry(`Received new artifact into Data Acquisition`, 'auto');
   };
 
-  // Analysis Actions
   const handleAddCoding = (coding: Omit<Coding, 'id'>) => {
     const newCoding: Coding = {
       ...coding,
@@ -369,12 +357,11 @@ export default function App() {
 
   const handleDeleteCode = (id: string) => {
       if(confirm('Delete this code/category? This will also remove associated codings.')) {
-          setCodes(prev => prev.filter(c => c.id !== id && c.parentId !== id)); // Remove code and children (simple strategy)
+          setCodes(prev => prev.filter(c => c.id !== id && c.parentId !== id)); 
           setCodings(prev => prev.filter(c => c.codeId !== id));
       }
   };
 
-  // Ontology Builder
   const handleElaborateOntology = async () => {
       setIsElaborating(true);
       const suggestions = await suggestOntology(codes);
@@ -433,7 +420,6 @@ export default function App() {
   };
 
   const handleUpdateMemo = (id: string, updates: Partial<Memo> | string) => {
-    // Overloaded to support string content update (legacy) or full partial update
     const actualUpdates = typeof updates === 'string' ? { content: updates } : updates;
     setMemos(prev => prev.map(m => m.id === id ? { ...m, ...actualUpdates } : m));
     if (typeof updates === 'string') addJournalEntry(`Updated annotation ${id}`, 'manual');
@@ -472,7 +458,6 @@ export default function App() {
     }
   };
 
-  // Edit Handlers
   const openMemoEditor = (memo: Memo) => {
       setEditingMemo(memo);
       setEditMemoContent(memo.content);
@@ -518,7 +503,6 @@ export default function App() {
         </div>
         
         <div className="flex items-center gap-3">
-            {/* Researcher Switcher */}
             <div className="mr-4">
                 <HoverCard openDelay={0} closeDelay={200}>
                     <HoverCardTrigger asChild>
@@ -629,7 +613,6 @@ export default function App() {
 
                 {/* 2. TEXT ANALYSIS */}
                 <TabsContent value="analyze" className="flex-1 h-full mt-0 relative data-[state=inactive]:hidden">
-                    {/* Content Layers */}
                     {activeArtifact && (activeArtifact.status === 'analysis' || activeArtifact.status === 'report') ? (
                         <>
                             {layersVisible[LayerType.ARTIFACT] && (
@@ -654,7 +637,6 @@ export default function App() {
                             />
                             )}
 
-                            {/* Graph Overlay */}
                             <TheoryGraph 
                                 codes={codes} 
                                 codings={codings} 
@@ -684,6 +666,8 @@ export default function App() {
                         onUpdateMemo={handleUpdateMemo}
                         theoryArtefact={theoryArtefact}
                         onCreateCode={handleCreateCode}
+                        settings={projectSettings} // Pass settings
+                        onOpenSettings={() => setIsSettingsOpen(true)} // Pass handler
                     />
                 </TabsContent>
 
@@ -699,7 +683,7 @@ export default function App() {
 
             </div>
 
-            {/* Right: Sidebar (Tabs for Codes / Memos) - Only in Analysis Mode */}
+            {/* Right: Sidebar */}
             {activeTab === 'analyze' && (
                 <div className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col z-20 shadow-xl overflow-hidden">
                     <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col">
@@ -710,7 +694,6 @@ export default function App() {
                              </TabsList>
                         </div>
 
-                        {/* TAB 1: CODEBOOK (ONTOLOGY) - Replaced with OntologyManager */}
                         <TabsContent value="codes" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
                              <OntologyManager 
                                 codes={codes}
@@ -727,7 +710,6 @@ export default function App() {
                              />
                         </TabsContent>
 
-                        {/* TAB 2: MEMO DIRECTORY */}
                         <TabsContent value="memos" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
                             <MemoDirectory 
                                 memos={memos}
@@ -740,7 +722,6 @@ export default function App() {
             )}
         </div>
 
-      {/* Reflexivity Journal Drawer */}
       <ReflexivityJournal 
             entries={journalEntries}
             onAddEntry={(content) => addJournalEntry(content, 'manual')}
@@ -748,7 +729,6 @@ export default function App() {
             onClose={() => setIsJournalOpen(false)}
         />
     
-      {/* Settings Dialog */}
       <SettingsDialog 
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -757,7 +737,6 @@ export default function App() {
         onSave={handleSaveSettings}
       />
 
-      {/* Global Memo Editor Dialog */}
       {editingMemo && (
              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
                  <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl w-[400px] animate-in fade-in zoom-in-95 overflow-hidden">
