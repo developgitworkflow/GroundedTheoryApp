@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayerConfig, LayerType } from '../types';
-import { Layers, Eye, EyeOff, FileText, Tag, Network, BookOpen } from 'lucide-react';
+import { Layers, Eye, EyeOff, FileText, Tag, Network, BookOpen, FolderTree } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Badge } from './ui/badge';
@@ -15,6 +15,7 @@ const getIcon = (type: LayerType) => {
   switch (type) {
     case LayerType.ARTIFACT: return <FileText size={16} />;
     case LayerType.OPEN_CODING: return <Tag size={16} />;
+    case LayerType.CATEGORIES: return <FolderTree size={16} />;
     case LayerType.AXIAL_CONNECTIONS: return <Network size={16} />;
     case LayerType.THEORY_MEMOS: return <BookOpen size={16} />;
     default: return <Layers size={16} />;

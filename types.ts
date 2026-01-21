@@ -187,7 +187,8 @@ export interface LayerConfig {
 export enum LayerType {
   ARTIFACT = 'ARTIFACT',
   OPEN_CODING = 'OPEN_CODING',
-  AXIAL_CONNECTIONS = 'AXIAL_CONNECTIONS', // Visualization of links
+  CATEGORIES = 'CATEGORIES', // New Layer
+  AXIAL_CONNECTIONS = 'AXIAL_CONNECTIONS',
   THEORY_MEMOS = 'THEORY_MEMOS',
 }
 

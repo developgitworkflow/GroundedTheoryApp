@@ -70,7 +70,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
   // Filter codings for this artifact
   const activeCodings = useMemo(() => {
-    if (!layersVisible[LayerType.OPEN_CODING]) return [];
+    // If no coding layer is visible, return nothing
+    if (!layersVisible[LayerType.OPEN_CODING] && !layersVisible[LayerType.CATEGORIES]) return [];
+
     let relevant = codings.filter(c => c.artifactId === artifact.id);
 
     if (selectedCodeId) {
@@ -386,10 +388,34 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                            )
                         );
 
-                        // Unique codes for the stripe margin
-                        const uniqueCodesInPara = Array.from(new Set(paraCodings.map(c => c.codeId)))
-                            .map(id => codes.find(c => c.id === id))
-                            .filter(Boolean) as Code[];
+                        // Determine distinct visual elements for stripes
+                        // We need to decide whether to show individual codes OR aggregated categories
+                        const stripesToRender: { code: Code, isCategoryAgg: boolean }[] = [];
+
+                        if (layersVisible[LayerType.OPEN_CODING]) {
+                             const uniqueCodesInPara = Array.from(new Set(paraCodings.map(c => c.codeId)))
+                                .map(id => codes.find(c => c.id === id))
+                                .filter(Boolean) as Code[];
+                             uniqueCodesInPara.forEach(c => stripesToRender.push({ code: c, isCategoryAgg: false }));
+                        }
+
+                        if (layersVisible[LayerType.CATEGORIES]) {
+                            // Find parent categories for codings
+                            const parents = new Set<string>();
+                            paraCodings.forEach(c => {
+                                const code = codes.find(x => x.id === c.codeId);
+                                if (code && code.parentId) parents.add(code.parentId);
+                                if (code && code.kind === 'category') parents.add(code.id); // If mapped directly to category
+                            });
+
+                            parents.forEach(pid => {
+                                const cat = codes.find(x => x.id === pid);
+                                if (cat) stripesToRender.push({ code: cat, isCategoryAgg: true });
+                            });
+                        }
+
+                        // Deduplicate stripes (if code is category and logic overlaps)
+                        const uniqueStripes = stripesToRender.filter((v,i,a) => a.findIndex(t => t.code.id === v.code.id) === i);
 
                         return (
                             <div 
@@ -423,8 +449,8 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                 </div>
 
                                 {/* 2. Coding Stripes Margin */}
-                                <div className="w-4 border-r border-zinc-800 bg-[#2d2d2d] flex flex-row relative select-none">
-                                    {uniqueCodesInPara.map((code) => (
+                                <div className="w-6 border-r border-zinc-800 bg-[#2d2d2d] flex flex-row relative select-none">
+                                    {uniqueStripes.map(({ code, isCategoryAgg }) => (
                                         <CodeHoverCard 
                                             key={code.id}
                                             code={code}
@@ -433,8 +459,15 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                             researchTeam={researchTeam}
                                         >
                                             <div 
-                                                className="flex-1 h-full hover:brightness-125 transition-all cursor-help relative"
-                                                style={{ backgroundColor: code.color }}
+                                                className={cn(
+                                                    "flex-1 h-full hover:brightness-125 transition-all cursor-help relative",
+                                                    isCategoryAgg ? "w-3" : "w-1"
+                                                )}
+                                                style={{ 
+                                                    backgroundColor: code.color,
+                                                    opacity: isCategoryAgg ? 0.8 : 1
+                                                }}
+                                                title={isCategoryAgg ? `Category: ${code.name}` : code.name}
                                             />
                                         </CodeHoverCard>
                                     ))}
@@ -481,7 +514,9 @@ const CodeHoverCard: React.FC<{
 }> = ({ code, codes, codings, researchTeam, children, align = "center", side = "right" }) => {
     
     // Filter codings for this specific code to identify researchers
-    const relevantCodings = codings.filter(c => c.codeId === code.id);
+    // If it's a category, we might want to sum children, but for simplicity we assume direct mapping + immediate children in usage stats
+    const childIds = codes.filter(c => c.parentId === code.id).map(c => c.id);
+    const relevantCodings = codings.filter(c => c.codeId === code.id || childIds.includes(c.codeId));
     const usageCount = relevantCodings.length;
     
     // Find unique researchers who used this code
@@ -524,13 +559,14 @@ const CodeHoverCard: React.FC<{
                     <div className="flex items-start gap-4">
                          <div className="shrink-0">
                              <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 shadow-inner" style={{ backgroundColor: `${code.color}20` }}>
-                                <Tag size={24} style={{ color: code.color }} />
+                                {code.kind === 'category' ? <FolderTree size={24} style={{ color: code.color }} /> : <Tag size={24} style={{ color: code.color }} />}
                              </div>
                          </div>
                          <div className="space-y-1">
                              <div className="flex items-center gap-2">
                                 <h4 className="text-lg font-bold text-zinc-100">{code.name}</h4>
                                 {code.isCore && <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30 text-[10px] h-5 px-1.5">CORE CATEGORY</Badge>}
+                                {code.kind === 'category' && <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-zinc-700 text-zinc-500">CATEGORY</Badge>}
                              </div>
                              <p className="text-xs text-zinc-400 leading-relaxed">
                                  {code.description || "Open coding category. No specific definition provided."}
@@ -636,8 +672,23 @@ const HighlightedText: React.FC<{
         let content = <>{segText}</>;
 
         // 2. Apply Code Highlighting (Underline/Color)
-        if (activeForSegment.length > 0) {
-            const codeRef = codes.find(c => c.id === activeForSegment[0].codeId);
+        // Note: For inline highlights, we prioritize showing the specific Open Code color if available,
+        // even if Category layer is on, because Categories are visualized in the margin stripes primarily.
+        // However, if only Category layer is on, we try to use parent color.
+        
+        const showOpenCodes = layersVisible[LayerType.OPEN_CODING];
+        const showCategories = layersVisible[LayerType.CATEGORIES];
+
+        if (activeForSegment.length > 0 && (showOpenCodes || showCategories)) {
+            const coding = activeForSegment[0];
+            let codeRef = codes.find(c => c.id === coding.codeId);
+            
+            // If only showing categories, try to find parent color
+            if (!showOpenCodes && showCategories && codeRef?.parentId) {
+                const parent = codes.find(c => c.id === codeRef!.parentId);
+                if (parent) codeRef = parent;
+            }
+
             const color = codeRef?.color || '#666';
 
             if (codeRef) {
@@ -646,7 +697,7 @@ const HighlightedText: React.FC<{
                         key={`code-${i}`}
                         code={codeRef} 
                         codes={codes}
-                        codings={allCodings} // pass all codings for context stats
+                        codings={allCodings} 
                         researchTeam={researchTeam}
                         side="top"
                     >
