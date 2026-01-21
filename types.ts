@@ -59,6 +59,7 @@ export interface Method {
   id: string;
   type: TypeOfMethod;
   protocolContent: string; // The protocol document content
+  participantIds?: string[]; // List of participants involved in this method
 }
 
 export interface Tool {

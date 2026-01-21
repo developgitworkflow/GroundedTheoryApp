@@ -115,7 +115,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
    const addMethod = () => {
-      const newMethod: Method = { id: `m-${Date.now()}`, type: 'interview', protocolContent: 'Standard Protocol...' };
+      const newMethod: Method = { 
+          id: `m-${Date.now()}`, 
+          type: 'interview', 
+          protocolContent: 'Standard Protocol...',
+          participantIds: [] 
+      };
       setLocalSettings(prev => ({ 
           ...prev, 
           theoreticalFramework: { ...prev.theoreticalFramework, methods: [...prev.theoreticalFramework.methods, newMethod] }
@@ -130,6 +135,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               methods: prev.theoreticalFramework.methods.map(m => m.id === id ? { ...m, ...updates } : m)
           }
       }));
+  };
+
+  const toggleMethodParticipant = (methodId: string, participantId: string) => {
+      setLocalSettings(prev => {
+          const methods = prev.theoreticalFramework.methods.map(m => {
+              if (m.id !== methodId) return m;
+              const currentIds = m.participantIds || [];
+              const newIds = currentIds.includes(participantId)
+                  ? currentIds.filter(id => id !== participantId)
+                  : [...currentIds, participantId];
+              return { ...m, participantIds: newIds };
+          });
+          return { ...prev, theoreticalFramework: { ...prev.theoreticalFramework, methods } };
+      });
   };
 
   const removeMethod = (id: string) => {
@@ -498,7 +517,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         {/* Methods */}
                         <div>
                              <div className="flex justify-between items-start mb-4">
-                                <SectionHeader title="Methods & Protocols" description="Data collection strategies." />
+                                <SectionHeader title="Methods & Participants" description="Data collection strategies and actor mapping." />
                                 <Button size="xs" variant="outline" onClick={addMethod} className="gap-2"><Plus size={14}/> Add Method</Button>
                              </div>
                              <div className="space-y-4">
@@ -528,6 +547,37 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                             placeholder="Enter Protocol content here..."
                                             className="bg-zinc-950 text-xs font-mono h-24"
                                         />
+                                        
+                                        {/* Participant Mapping */}
+                                        <div className="pt-2 border-t border-zinc-800/50 mt-2">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Users size={12} className="text-zinc-500" />
+                                                <span className="text-[10px] uppercase font-bold text-zinc-500">Target Participants</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {localSettings.participants.length > 0 ? localSettings.participants.map(p => {
+                                                    const isSelected = m.participantIds?.includes(p.id);
+                                                    return (
+                                                        <Badge 
+                                                            key={p.id}
+                                                            variant={isSelected ? "secondary" : "outline"}
+                                                            className={cn(
+                                                                "cursor-pointer text-[10px] h-5 px-2 border-zinc-700 select-none transition-all",
+                                                                isSelected 
+                                                                    ? "bg-blue-900/30 text-blue-200 border-blue-800 hover:bg-blue-900/50" 
+                                                                    : "text-zinc-500 hover:text-zinc-300 hover:border-zinc-500 bg-zinc-950"
+                                                            )}
+                                                            onClick={() => toggleMethodParticipant(m.id, p.id)}
+                                                        >
+                                                            {isSelected && <Check size={8} className="mr-1" />}
+                                                            {p.anonymizedCode}
+                                                        </Badge>
+                                                    );
+                                                }) : (
+                                                    <span className="text-[10px] text-zinc-600 italic">No participants added in Ontology tab yet.</span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                              </div>
