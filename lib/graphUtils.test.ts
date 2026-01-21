@@ -4,9 +4,9 @@ import { Code, Coding } from '../types';
 
 describe('buildTheoryGraph', () => {
   const mockCodes: Code[] = [
-    { id: 'c1', name: 'Code A', color: 'red' },
-    { id: 'c2', name: 'Code B', color: 'blue' },
-    { id: 'c3', name: 'Code C', color: 'green' },
+    { id: 'c1', name: 'Code A', color: 'red', kind: 'code', relatedCodeIds: [] },
+    { id: 'c2', name: 'Code B', color: 'blue', kind: 'code', relatedCodeIds: [] },
+    { id: 'c3', name: 'Code C', color: 'green', kind: 'code', relatedCodeIds: [] },
   ];
 
   it('should create nodes for all codes', () => {
@@ -72,8 +72,8 @@ describe('buildTheoryGraph', () => {
 
   it('should connect core category to isolated nodes', () => {
     const codesWithCore: Code[] = [
-        { id: 'c1', name: 'Core', color: 'red', isCore: true },
-        { id: 'c2', name: 'Isolated', color: 'blue' },
+        { id: 'c1', name: 'Core', color: 'red', isCore: true, kind: 'category', relatedCodeIds: [] },
+        { id: 'c2', name: 'Isolated', color: 'blue', kind: 'code', relatedCodeIds: [] },
     ];
     // No codings, so no natural links
     const codings: Coding[] = [];

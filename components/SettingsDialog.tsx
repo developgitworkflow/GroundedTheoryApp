@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProjectSettings } from '../types';
+import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria } from '../types';
 import { 
   Settings, 
   User, 
@@ -10,7 +10,14 @@ import {
   Save, 
   X, 
   Database,
-  LayoutTemplate
+  LayoutTemplate,
+  ScrollText,
+  Users,
+  GraduationCap,
+  ShieldCheck,
+  Plus,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -23,23 +30,76 @@ interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   settings: ProjectSettings;
-  onSave: (settings: ProjectSettings) => void;
+  team?: ResearchTeam;
+  onSave: (settings: ProjectSettings, team?: ResearchTeam) => void;
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ 
   isOpen, 
   onClose, 
   settings, 
+  team,
   onSave 
 }) => {
   const [localSettings, setLocalSettings] = useState<ProjectSettings>(settings);
+  const [localTeam, setLocalTeam] = useState<ResearchTeam>(team || { id: 'default', researchers: [], consensusCriteria: [] });
   const [activeTab, setActiveTab] = useState('general');
 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    onSave(localSettings);
+    onSave(localSettings, localTeam);
     onClose();
+  };
+
+  // Team Management Handlers
+  const addResearcher = () => {
+    const newResearcher: Researcher = {
+        id: `r-${Date.now()}`,
+        name: 'New Researcher',
+        role: 'Junior',
+        color: '#94a3b8',
+        initials: 'NR'
+    };
+    setLocalTeam(prev => ({ ...prev, researchers: [...prev.researchers, newResearcher] }));
+  };
+
+  const updateResearcher = (id: string, updates: Partial<Researcher>) => {
+    setLocalTeam(prev => ({
+        ...prev,
+        researchers: prev.researchers.map(r => r.id === id ? { ...r, ...updates } : r)
+    }));
+  };
+
+  const removeResearcher = (id: string) => {
+    setLocalTeam(prev => ({
+        ...prev,
+        researchers: prev.researchers.filter(r => r.id !== id)
+    }));
+  };
+
+  const addCriteria = () => {
+      const newCrit: ConsensusCriteria = {
+          id: `cc-${Date.now()}`,
+          name: 'New Criteria',
+          description: '',
+          active: true
+      };
+      setLocalTeam(prev => ({ ...prev, consensusCriteria: [...prev.consensusCriteria, newCrit] }));
+  };
+  
+  const updateCriteria = (id: string, updates: Partial<ConsensusCriteria>) => {
+      setLocalTeam(prev => ({
+          ...prev,
+          consensusCriteria: prev.consensusCriteria.map(c => c.id === id ? { ...c, ...updates } : c)
+      }));
+  };
+
+  const removeCriteria = (id: string) => {
+    setLocalTeam(prev => ({
+        ...prev,
+        consensusCriteria: prev.consensusCriteria.filter(c => c.id !== id)
+    }));
   };
 
   return (
@@ -72,11 +132,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     icon={LayoutTemplate} 
                     label="General" 
                 />
+                 <NavButton 
+                    active={activeTab === 'team'} 
+                    onClick={() => setActiveTab('team')} 
+                    icon={Users} 
+                    label="Team & Roles" 
+                />
                 <NavButton 
                     active={activeTab === 'project'} 
                     onClick={() => setActiveTab('project')} 
                     icon={Database} 
                     label="Project Data" 
+                />
+                 <NavButton 
+                    active={activeTab === 'theory'} 
+                    onClick={() => setActiveTab('theory')} 
+                    icon={ScrollText} 
+                    label="Theory Methodology" 
                 />
                 <div className="h-px bg-zinc-800 my-2 mx-2" />
                 <NavButton 
@@ -126,6 +198,107 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
                 )}
 
+                {activeTab === 'team' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-start">
+                             <SectionHeader title="Research Team" description="Manage researchers and assign role-based permissions." />
+                             <Button size="xs" variant="brand" onClick={addResearcher} className="gap-2"><Plus size={14}/> Add Researcher</Button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {localTeam.researchers.map(r => (
+                                <div key={r.id} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg group">
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ backgroundColor: r.color + '40', color: r.color }}>
+                                        {r.initials}
+                                    </div>
+                                    <div className="flex-1 grid grid-cols-3 gap-2">
+                                        <Input 
+                                            value={r.name} 
+                                            onChange={(e) => updateResearcher(r.id, { name: e.target.value, initials: e.target.value.substring(0,2).toUpperCase() })}
+                                            className="h-8 bg-zinc-950 border-zinc-800"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <Button 
+                                                size="xs" 
+                                                variant={r.role === 'Senior' ? 'default' : 'outline'}
+                                                onClick={() => updateResearcher(r.id, { role: 'Senior' })}
+                                                className={cn("flex-1", r.role === 'Senior' ? "bg-indigo-600 text-white border-transparent" : "text-zinc-500")}
+                                            >
+                                                <GraduationCap size={12} className="mr-1"/> Senior
+                                            </Button>
+                                            <Button 
+                                                size="xs" 
+                                                variant={r.role === 'Junior' ? 'default' : 'outline'}
+                                                onClick={() => updateResearcher(r.id, { role: 'Junior' })}
+                                                className={cn("flex-1", r.role === 'Junior' ? "bg-zinc-700 text-white border-transparent" : "text-zinc-500")}
+                                            >
+                                                <Users size={12} className="mr-1"/> Junior
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="color" 
+                                                value={r.color}
+                                                onChange={(e) => updateResearcher(r.id, { color: e.target.value })}
+                                                className="h-8 w-12 bg-transparent border-none rounded cursor-pointer"
+                                            />
+                                            {localTeam.researchers.length > 1 && (
+                                                <Button size="icon" variant="ghost" onClick={() => removeResearcher(r.id)} className="h-8 w-8 text-red-500 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Trash2 size={14} />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="h-px bg-zinc-800 my-4" />
+
+                        <div className="flex justify-between items-start">
+                             <SectionHeader title="Consensus Criteria" description="Define rules for coding agreement and review processes." />
+                             <Button size="xs" variant="outline" onClick={addCriteria} className="gap-2"><Plus size={14}/> Add Rule</Button>
+                        </div>
+
+                        <div className="space-y-3">
+                             {localTeam.consensusCriteria.length === 0 && (
+                                 <p className="text-zinc-500 text-sm italic">No consensus rules defined.</p>
+                             )}
+                             {localTeam.consensusCriteria.map(c => (
+                                 <div key={c.id} className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg space-y-2 group">
+                                     <div className="flex items-center gap-2">
+                                         <ShieldCheck size={16} className={c.active ? "text-emerald-500" : "text-zinc-600"} />
+                                         <Input 
+                                            value={c.name}
+                                            onChange={(e) => updateCriteria(c.id, { name: e.target.value })}
+                                            className="h-8 flex-1 bg-transparent border-none focus:ring-0 font-medium px-0"
+                                            placeholder="Rule Name..."
+                                         />
+                                         <div className="flex items-center gap-2">
+                                             <label className="text-[10px] text-zinc-500 uppercase font-bold">Active</label>
+                                             <input 
+                                                type="checkbox" 
+                                                checked={c.active} 
+                                                onChange={(e) => updateCriteria(c.id, { active: e.target.checked })}
+                                                className="accent-emerald-500"
+                                             />
+                                             <Button size="icon" variant="ghost" onClick={() => removeCriteria(c.id)} className="h-6 w-6 text-zinc-600 hover:text-red-500 ml-2">
+                                                 <X size={14} />
+                                             </Button>
+                                         </div>
+                                     </div>
+                                     <Input 
+                                        value={c.description}
+                                        onChange={(e) => updateCriteria(c.id, { description: e.target.value })}
+                                        className="h-8 bg-zinc-950 border-zinc-800 text-xs text-zinc-400"
+                                        placeholder="Description of the consensus requirement..."
+                                     />
+                                 </div>
+                             ))}
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'project' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <SectionHeader title="Project Metadata" description="Core information about this research project." />
@@ -145,16 +318,70 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 placeholder="Describe the research goals, methodology, and scope..." 
                             />
                         </div>
+                    </div>
+                )}
 
-                        <div className="bg-amber-950/20 border border-amber-900/50 rounded-md p-4 flex items-start gap-3">
-                             <Database className="text-amber-500 shrink-0 mt-0.5" size={16} />
-                             <div className="space-y-1">
-                                 <h4 className="text-sm font-medium text-amber-500">Database Statistics</h4>
-                                 <p className="text-xs text-amber-400/70">
-                                     Local storage usage: ~2.4 MB<br/>
-                                     Last backup: Never
-                                 </p>
-                             </div>
+                {activeTab === 'theory' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <SectionHeader title="Grounded Theory Approach" description="Define the methodological framework guiding your analysis." />
+                        
+                        <div className="grid gap-4">
+                            {/* Constructivist */}
+                            <div 
+                                onClick={() => setLocalSettings({...localSettings, theoryType: 'constructivist'})}
+                                className={cn(
+                                    "p-4 rounded-lg border cursor-pointer transition-all",
+                                    localSettings.theoryType === 'constructivist' 
+                                        ? "bg-purple-900/20 border-purple-500" 
+                                        : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+                                )}
+                            >
+                                <div className="flex justify-between mb-1">
+                                    <h4 className="font-semibold text-zinc-200">Constructivist (Charmaz)</h4>
+                                    {localSettings.theoryType === 'constructivist' && <Badge className="bg-purple-600">Active</Badge>}
+                                </div>
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                    Emphasizes the subjective nature of data and the researcher's co-construction of meaning. Focuses on actions, processes, and flexible coding.
+                                </p>
+                            </div>
+
+                            {/* Straussian */}
+                            <div 
+                                onClick={() => setLocalSettings({...localSettings, theoryType: 'straussian'})}
+                                className={cn(
+                                    "p-4 rounded-lg border cursor-pointer transition-all",
+                                    localSettings.theoryType === 'straussian' 
+                                        ? "bg-blue-900/20 border-blue-500" 
+                                        : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+                                )}
+                            >
+                                <div className="flex justify-between mb-1">
+                                    <h4 className="font-semibold text-zinc-200">Straussian (Strauss & Corbin)</h4>
+                                    {localSettings.theoryType === 'straussian' && <Badge className="bg-blue-600">Active</Badge>}
+                                </div>
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                    Systematic approach using the coding paradigm (conditions, context, strategies, consequences). Focuses on verification and structure.
+                                </p>
+                            </div>
+
+                            {/* Classic */}
+                            <div 
+                                onClick={() => setLocalSettings({...localSettings, theoryType: 'classic'})}
+                                className={cn(
+                                    "p-4 rounded-lg border cursor-pointer transition-all",
+                                    localSettings.theoryType === 'classic' 
+                                        ? "bg-amber-900/20 border-amber-500" 
+                                        : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+                                )}
+                            >
+                                <div className="flex justify-between mb-1">
+                                    <h4 className="font-semibold text-zinc-200">Classic (Glaser)</h4>
+                                    {localSettings.theoryType === 'classic' && <Badge className="bg-amber-600">Active</Badge>}
+                                </div>
+                                <p className="text-xs text-zinc-400 leading-relaxed">
+                                    Strict inductive approach. Avoids forcing data into preconceived categories. Focuses on the emergence of the core category.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -245,7 +472,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         <div className="h-16 border-t border-zinc-800 bg-zinc-950 flex items-center justify-end px-6 gap-3">
              <Button variant="ghost" onClick={onClose}>Cancel</Button>
              <Button variant="brand" onClick={handleSave} className="gap-2">
-                <Save size={16} /> Save Settings
+                <Save size={16} /> Save Configuration
              </Button>
         </div>
       </div>

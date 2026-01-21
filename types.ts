@@ -1,5 +1,4 @@
 
-
 export interface Project {
   id: string;
   name: string;
@@ -24,13 +23,59 @@ export interface Artifact {
   curation: CurationMetadata;
 }
 
+// Enumeration of Grounded Theory approaches
+export type TheoryType = 'classic' | 'constructivist' | 'straussian';
+
+// Represents the "Theory" Artefact
+export interface Theory {
+  id: string;
+  type: TheoryType; // Defined by TypeOfTheory
+  content: string; // Stored as TypeOfDocument (The narrative)
+  categoryIds: string[]; // listOfCategories
+}
+
+// --- RESEARCH TEAM DOMAIN ---
+
+export type ResearcherRole = 'Junior' | 'Senior';
+
+export interface Researcher {
+  id: string;
+  name: string;
+  role: ResearcherRole;
+  color: string; // Visual distinction for multi-user coding
+  initials: string;
+}
+
+export interface ConsensusCriteria {
+  id: string;
+  name: string;
+  description: string;
+  active: boolean;
+}
+
+export interface ResearchTeam {
+  id: string;
+  researchers: Researcher[];
+  consensusCriteria: ConsensusCriteria[];
+}
+
+// ---------------------------
+
+// Updates to Code to support "Code" vs "Category" distinction
 export interface Code {
   id: string;
   name: string;
   color: string;
   description?: string;
-  parentId?: string; // For hierarchical/axial coding
-  isCore?: boolean; // The central phenomenon in the curated model
+  
+  // Distinguish between a fine-grained 'code' and a conceptual 'category'
+  kind: 'code' | 'category'; 
+  
+  parentId?: string; // Hierarchical link (Category -> Sub-category)
+  isCore?: boolean; // The central phenomenon
+  
+  // Structs for lateral relationships
+  relatedCodeIds: string[]; // listOfRelatedCodes / listOfRelatedCategories
 }
 
 export interface Coding {
@@ -40,6 +85,8 @@ export interface Coding {
   start: number;
   end: number;
   textSnippet: string;
+  // Track who created the coding
+  researcherId?: string; 
 }
 
 export interface Memo {
@@ -50,6 +97,7 @@ export interface Memo {
   createdAt: string;
   type: 'theoretical' | 'procedural' | 'observational';
   number: number; // Added sequence number for reference
+  authorId?: string; // Track author
   segment?: {
     start: number;
     end: number;
@@ -62,6 +110,7 @@ export interface JournalEntry {
   timestamp: string;
   content: string;
   type: 'auto' | 'manual';
+  authorId?: string;
 }
 
 export interface LayerConfig {
@@ -85,9 +134,12 @@ export interface Point {
 
 export interface ProjectSettings {
   projectName: string;
-  userName: string;
-  themeMode: 'dark' | 'light'; // Currently locked to dark in UI but good for schema
-  stripeWidth: number; // MAXQDA visual setting
-  aiModel: 'gemini-3-flash-preview' | 'gemini-3-pro-preview'; // Atlas.ti AI setting
-  stopWords: string[]; // Atlas.ti Analysis setting
+  userName: string; // Legacy field, kept for backward compat, but UI should favor activeResearcher
+  themeMode: 'dark' | 'light'; 
+  stripeWidth: number; 
+  aiModel: 'gemini-3-flash-preview' | 'gemini-3-pro-preview'; 
+  stopWords: string[]; 
+  
+  // Global theory configuration
+  theoryType: TheoryType;
 }

@@ -9,7 +9,7 @@ import { MemoDirectory } from './components/MemoDirectory';
 import { SettingsDialog } from './components/SettingsDialog'; // New Import
 import { Visualizations } from './components/Visualizations'; // New Import
 import { suggestOntology } from './services/geminiService'; // New Import
-import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings } from './types';
+import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher } from './types';
 import { 
   FilePlus, 
   Settings, 
@@ -24,7 +24,9 @@ import {
   GitMerge,
   ChevronRight,
   ChevronDown,
-  Loader2
+  Loader2,
+  Users,
+  GraduationCap
 } from 'lucide-react';
 
 // Design System Components
@@ -32,7 +34,9 @@ import { Button } from './components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
 import { Input } from './components/ui/input';
 import { Badge } from './components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
 import { cn } from './lib/utils';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from './components/ui/hover-card';
 
 const INITIAL_LAYERS: LayerConfig[] = [
   { id: LayerType.ARTIFACT, label: 'Artifact Source', visible: true, color: '#fff' },
@@ -77,18 +81,19 @@ Subject: Yeah. When I'm at home, I work harder because I'm grateful for the flex
     }
 ];
 
+// Initial Codes now distinguish between 'code' and 'category'
 const INITIAL_CODES: Code[] = [
-  { id: 'c1', name: 'Betrayal', color: '#ef4444' }, // Red
-  { id: 'c2', name: 'Autonomy', color: '#3b82f6' }, // Blue
-  { id: 'c3', name: 'Resistance', color: '#f59e0b' }, // Amber
-  { id: 'c4', name: 'Trust Deficit', color: '#8b5cf6' }, // Violet
-  { id: 'c5', name: 'Productivity Paradox', color: '#10b981' }, // Emerald
+  { id: 'c1', name: 'Betrayal', color: '#ef4444', kind: 'code', relatedCodeIds: [] }, 
+  { id: 'c2', name: 'Autonomy', color: '#3b82f6', kind: 'code', relatedCodeIds: [] }, 
+  { id: 'c3', name: 'Resistance', color: '#f59e0b', kind: 'category', relatedCodeIds: [] }, 
+  { id: 'c4', name: 'Trust Deficit', color: '#8b5cf6', kind: 'category', relatedCodeIds: [] }, 
+  { id: 'c5', name: 'Productivity Paradox', color: '#10b981', kind: 'code', relatedCodeIds: [] }, 
 ];
 
 const INITIAL_CODINGS: Coding[] = [
-  { id: 'cd1', artifactId: 'a1', codeId: 'c1', start: 86, end: 94, textSnippet: 'betrayal' },
-  { id: 'cd2', artifactId: 'a1', codeId: 'c2', start: 175, end: 183, textSnippet: 'autonomy' },
-  { id: 'cd3', artifactId: 'a1', codeId: 'c4', start: 209, end: 236, textSnippet: "management didn't trust us" },
+  { id: 'cd1', artifactId: 'a1', codeId: 'c1', start: 86, end: 94, textSnippet: 'betrayal', researcherId: 'r1' },
+  { id: 'cd2', artifactId: 'a1', codeId: 'c2', start: 175, end: 183, textSnippet: 'autonomy', researcherId: 'r1' },
+  { id: 'cd3', artifactId: 'a1', codeId: 'c4', start: 209, end: 236, textSnippet: "management didn't trust us", researcherId: 'r2' },
 ];
 
 const INITIAL_SETTINGS: ProjectSettings = {
@@ -97,7 +102,20 @@ const INITIAL_SETTINGS: ProjectSettings = {
   themeMode: "dark",
   stripeWidth: 4,
   aiModel: "gemini-3-flash-preview",
-  stopWords: ["the", "and", "is", "of", "to", "in", "it", "that", "was"]
+  stopWords: ["the", "and", "is", "of", "to", "in", "it", "that", "was"],
+  theoryType: "constructivist" // Default approach
+};
+
+const INITIAL_TEAM: ResearchTeam = {
+  id: 'team-1',
+  researchers: [
+    { id: 'r1', name: 'Dr. Alistair', role: 'Senior', color: '#3b82f6', initials: 'DA' },
+    { id: 'r2', name: 'Sarah J.', role: 'Junior', color: '#ec4899', initials: 'SJ' }
+  ],
+  consensusCriteria: [
+    { id: 'cc1', name: 'Inter-coder Reliability', description: 'At least 2 researchers must code the same segment for core categories.', active: true },
+    { id: 'cc2', name: 'Senior Sign-off', description: 'Senior researcher must approve all axial coding relationships.', active: true }
+  ]
 };
 
 // --- Recursive Tree Component ---
@@ -149,6 +167,7 @@ const CodeTreeItem = ({
                     {code.name}
                 </span>
 
+                {code.kind === 'category' && <span className="text-[9px] text-zinc-500 uppercase font-mono bg-zinc-800 px-1 rounded">CAT</span>}
                 {code.isCore && <span className="text-[8px] text-yellow-600">★</span>}
                 
                 <span className="text-[9px] text-zinc-600 font-mono w-5 text-right">
@@ -189,6 +208,20 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isElaborating, setIsElaborating] = useState(false);
 
+  // Team State
+  const [researchTeam, setResearchTeam] = useState<ResearchTeam>(INITIAL_TEAM);
+  const [activeResearcherId, setActiveResearcherId] = useState<string>(INITIAL_TEAM.researchers[0].id);
+
+  const activeResearcher = researchTeam.researchers.find(r => r.id === activeResearcherId) || researchTeam.researchers[0];
+  
+  // The central Theory Artefact
+  const [theoryArtefact, setTheoryArtefact] = useState<Theory>({
+      id: 'theory-1',
+      type: projectSettings.theoryType,
+      content: '',
+      categoryIds: []
+  });
+
   // Global Edit State
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
   const [editMemoContent, setEditMemoContent] = useState('');
@@ -209,7 +242,8 @@ export default function App() {
         id: `entry-${Date.now()}`,
         timestamp: new Date().toISOString(),
         content,
-        type
+        type,
+        authorId: activeResearcherId
     };
     setJournalEntries(prev => [...prev, entry]);
   };
@@ -259,7 +293,8 @@ export default function App() {
   const handleAddCoding = (coding: Omit<Coding, 'id'>) => {
     const newCoding: Coding = {
       ...coding,
-      id: `coding-${Date.now()}`
+      id: `coding-${Date.now()}`,
+      researcherId: activeResearcherId // Track who coded it
     };
     setCodings([...codings, newCoding]);
     const codeName = codes.find(c => c.id === coding.codeId)?.name;
@@ -273,7 +308,9 @@ export default function App() {
     const newCode: Code = {
       id: `code-${Date.now()}`,
       name,
-      color: randomColor
+      color: randomColor,
+      kind: 'code',
+      relatedCodeIds: []
     };
     setCodes(prev => [...prev, newCode]);
     addJournalEntry(`Created new in-vivo code: [${name}]`, 'auto');
@@ -297,8 +334,13 @@ export default function App() {
                   name: group.parent,
                   color: '#ffffff', // Category placeholder color
                   description: 'AI Generated Category',
+                  kind: 'category',
+                  relatedCodeIds: []
               };
               newCodes.push(parentCode);
+          } else {
+              // Promote to category
+              parentCode.kind = 'category';
           }
 
           // Link children
@@ -325,7 +367,8 @@ export default function App() {
           createdAt: new Date().toISOString(),
           type: 'observational',
           segment: range ? { start: range.start, end: range.end, text: snippet } : undefined,
-          number: memos.length + 1
+          number: memos.length + 1,
+          authorId: activeResearcherId
       };
       setMemos(prev => [...prev, newMemo]);
       addJournalEntry(`Added observational memo #${newMemo.number}`, 'auto');
@@ -349,16 +392,21 @@ export default function App() {
           relatedIds: [],
           createdAt: new Date().toISOString(),
           type: 'theoretical',
-          number: memos.length + 1
+          number: memos.length + 1,
+          authorId: activeResearcherId
       };
       setMemos(prev => [...prev, newMemo]);
-      addJournalEntry(`Generated theoretical story line: ${title}`, 'auto');
+      // Update the main theory content
+      setTheoryArtefact(prev => ({ ...prev, content: content }));
+      addJournalEntry(`Updated Theory Artefact Content: ${title}`, 'auto');
   };
 
   const handleSetCoreCategory = (codeId: string) => {
       setCodes(prev => prev.map(c => ({
           ...c,
-          isCore: c.id === codeId
+          isCore: c.id === codeId,
+          // Implicitly promote to category if selected as core
+          kind: c.id === codeId ? 'category' : c.kind
       })));
       const name = codes.find(c => c.id === codeId)?.name;
       addJournalEntry(`Defined [${name}] as Core Category for the curated model.`, 'manual');
@@ -383,9 +431,14 @@ export default function App() {
   };
 
   // Handle Settings Save
-  const handleSaveSettings = (newSettings: ProjectSettings) => {
+  const handleSaveSettings = (newSettings: ProjectSettings, updatedTeam?: ResearchTeam) => {
     setProjectSettings(newSettings);
-    addJournalEntry(`Updated project settings`, 'auto');
+    if (updatedTeam) {
+        setResearchTeam(updatedTeam);
+    }
+    // Update Theory Artefact type if changed
+    setTheoryArtefact(prev => ({ ...prev, type: newSettings.theoryType }));
+    addJournalEntry(`Updated project settings and team configuration`, 'auto');
   };
 
   return (
@@ -397,12 +450,54 @@ export default function App() {
              <BrainCircuit size={28} className="text-blue-600" />
              <span className="font-bold text-xl tracking-tight text-white">STRATUM</span>
           </div>
-          <Badge variant="secondary" className="font-normal text-zinc-400 border-zinc-800">
+          <Badge variant="secondary" className="font-normal text-zinc-400 border-zinc-800 hidden md:inline-flex">
             Project: {projectSettings.projectName}
           </Badge>
         </div>
         
         <div className="flex items-center gap-3">
+            {/* Researcher Switcher */}
+            <div className="mr-4">
+                <HoverCard openDelay={0} closeDelay={200}>
+                    <HoverCardTrigger asChild>
+                         <Button variant="outline" size="sm" className="gap-2 border-zinc-700 bg-zinc-900/50 pl-1">
+                             <Avatar className="h-6 w-6 border border-zinc-600">
+                                <AvatarFallback style={{ backgroundColor: activeResearcher.color, color: 'white' }}>{activeResearcher.initials}</AvatarFallback>
+                             </Avatar>
+                             <span className="text-zinc-200">{activeResearcher.name}</span>
+                             <ChevronDown size={12} className="text-zinc-500" />
+                         </Button>
+                    </HoverCardTrigger>
+                    <HoverCardContent align="end" className="w-60 p-2 bg-zinc-950 border-zinc-800">
+                        <div className="text-xs font-semibold text-zinc-500 mb-2 px-2 uppercase flex items-center gap-2">
+                           <Users size={12}/> Switch Researcher
+                        </div>
+                        {researchTeam.researchers.map(r => (
+                            <div 
+                                key={r.id}
+                                onClick={() => setActiveResearcherId(r.id)}
+                                className={cn(
+                                    "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-zinc-800 transition-colors",
+                                    r.id === activeResearcherId ? "bg-zinc-900 ring-1 ring-zinc-800" : ""
+                                )}
+                            >
+                                 <Avatar className="h-8 w-8">
+                                     <AvatarFallback style={{ backgroundColor: r.color, color: 'white' }}>{r.initials}</AvatarFallback>
+                                 </Avatar>
+                                 <div className="flex flex-col">
+                                     <span className="text-sm font-medium text-zinc-200">{r.name}</span>
+                                     <span className="text-[10px] text-zinc-500 flex items-center gap-1">
+                                        {r.role === 'Senior' ? <GraduationCap size={10} /> : <Users size={10} />}
+                                        {r.role}
+                                     </span>
+                                 </div>
+                                 {r.id === activeResearcherId && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                            </div>
+                        ))}
+                    </HoverCardContent>
+                </HoverCard>
+            </div>
+
             <Button 
                 onClick={() => setIsJournalOpen(!isJournalOpen)}
                 variant={isJournalOpen ? "secondary" : "outline"}
@@ -411,10 +506,7 @@ export default function App() {
             >
                 <BookMarked size={16} /> Journal
             </Button>
-            <Button variant="brand" size="sm" className="gap-2">
-                <Download size={16} /> Export
-            </Button>
-            <div className="w-px h-6 bg-zinc-800 mx-2"></div>
+            <div className="w-px h-6 bg-zinc-800 mx-1"></div>
             <Button 
                 variant="ghost" 
                 size="icon" 
@@ -483,6 +575,7 @@ export default function App() {
                                 codings={codings} 
                                 codes={codes} 
                                 memos={memos}
+                                researchTeam={researchTeam} // Pass team info
                                 layersVisible={layersVisible}
                                 onAddCoding={handleAddCoding}
                                 onCreateCode={handleCreateCode}
@@ -514,6 +607,7 @@ export default function App() {
                         memos={memos.filter(m => m.type === 'theoretical')}
                         onSetCoreCategory={handleSetCoreCategory}
                         onAddMemo={handleAddTheoryMemo}
+                        theoryArtefact={theoryArtefact}
                     />
                 </TabsContent>
 
@@ -623,6 +717,7 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         settings={projectSettings}
+        team={researchTeam}
         onSave={handleSaveSettings}
       />
 

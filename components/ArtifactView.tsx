@@ -1,7 +1,5 @@
-
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Artifact, Coding, Code, LayerType, Memo } from '../types';
+import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher } from '../types';
 import { suggestCodes } from '../services/geminiService';
 import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -10,12 +8,14 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
 import { Badge } from './ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut } from './ui/command';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { Avatar, AvatarFallback } from './ui/avatar';
 
 interface ArtifactViewProps {
   artifact: Artifact;
   codings: Coding[];
   codes: Code[];
   memos?: Memo[];
+  researchTeam?: ResearchTeam;
   layersVisible: Record<LayerType, boolean>;
   onAddCoding: (coding: Omit<Coding, 'id'>) => void;
   onCreateCode: (name: string) => Promise<Code>;
@@ -30,6 +30,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   codings, 
   codes, 
   memos = [],
+  researchTeam,
   layersVisible,
   onAddCoding,
   onCreateCode,
@@ -377,6 +378,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                             code={code}
                                             codes={codes}
                                             codings={codings}
+                                            researchTeam={researchTeam}
                                         >
                                             <div 
                                                 className="flex-1 h-full hover:brightness-125 transition-all cursor-help relative"
@@ -395,6 +397,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         codes={codes}
                                         allCodings={codings}
                                         memos={paraMemos}
+                                        researchTeam={researchTeam}
                                         layersVisible={layersVisible}
                                     />
                                 </div>
@@ -419,12 +422,21 @@ const CodeHoverCard: React.FC<{
     code: Code;
     codes: Code[];
     codings: Coding[];
+    researchTeam?: ResearchTeam;
     children: React.ReactNode;
     align?: "start" | "center" | "end";
     side?: "top" | "right" | "bottom" | "left";
-}> = ({ code, codes, codings, children, align = "center", side = "right" }) => {
+}> = ({ code, codes, codings, researchTeam, children, align = "center", side = "right" }) => {
     
-    const usageCount = codings.filter(c => c.codeId === code.id).length;
+    // Filter codings for this specific code to identify researchers
+    const relevantCodings = codings.filter(c => c.codeId === code.id);
+    const usageCount = relevantCodings.length;
+    
+    // Find unique researchers who used this code
+    const contributorIds = Array.from(new Set(relevantCodings.map(c => c.researcherId).filter(Boolean)));
+    const contributors = researchTeam 
+        ? researchTeam.researchers.filter(r => contributorIds.includes(r.id))
+        : [];
     
     // Calculate Hierarchy (Simple 2-level for now)
     const parentCode = codes.find(c => c.id === code.parentId);
@@ -474,6 +486,7 @@ const CodeHoverCard: React.FC<{
                          </div>
                     </div>
 
+                    {/* Stats & Contributors */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800 flex items-center gap-3">
                              <Activity size={16} className="text-blue-500" />
@@ -482,11 +495,14 @@ const CodeHoverCard: React.FC<{
                                  <div className="text-sm font-mono text-zinc-200">{usageCount} refs</div>
                              </div>
                         </div>
-                        <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800 flex items-center gap-3">
-                             <Hash size={16} className="text-purple-500" />
-                             <div>
-                                 <div className="text-[10px] text-zinc-500 uppercase font-bold">Code ID</div>
-                                 <div className="text-xs font-mono text-zinc-400 truncate w-24" title={code.id}>{code.id}</div>
+                        <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800">
+                             <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Contributors</div>
+                             <div className="flex -space-x-2">
+                                 {contributors.length > 0 ? contributors.map(r => (
+                                     <Avatar key={r.id} className="h-5 w-5 border border-zinc-800 ring-1 ring-black">
+                                         <AvatarFallback className="text-[8px]" style={{ backgroundColor: r.color, color: 'white' }}>{r.initials}</AvatarFallback>
+                                     </Avatar>
+                                 )) : <span className="text-xs text-zinc-600 italic">Unknown</span>}
                              </div>
                         </div>
                     </div>
@@ -510,8 +526,9 @@ const HighlightedText: React.FC<{
     codes: Code[];
     allCodings: Coding[];
     memos?: Memo[];
+    researchTeam?: ResearchTeam;
     layersVisible: Record<LayerType, boolean>;
-}> = ({ text, paraStart, codings, codes, allCodings, memos = [], layersVisible }) => {
+}> = ({ text, paraStart, codings, codes, allCodings, memos = [], researchTeam, layersVisible }) => {
     
     // If no layers active, just return text
     if (codings.length === 0 && memos.length === 0) return <>{text}</>;
@@ -577,7 +594,8 @@ const HighlightedText: React.FC<{
                         key={`code-${i}`}
                         code={codeRef} 
                         codes={codes}
-                        codings={allCodings}
+                        codings={allCodings} // pass all codings for context stats
+                        researchTeam={researchTeam}
                         side="top"
                     >
                          <span 
@@ -588,7 +606,6 @@ const HighlightedText: React.FC<{
                             }}
                         >
                             {segText}
-                            {/* Tiny number badge for the first segment of a coding to identify it? Too cluttered. */}
                         </span>
                     </CodeHoverCard>
                 );
@@ -608,6 +625,8 @@ const HighlightedText: React.FC<{
 
             if (endingMemos.length > 0) {
                 const primaryMemo = endingMemos[0];
+                const author = researchTeam?.researchers.find(r => r.id === primaryMemo.authorId);
+
                  segments.push(
                     <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10")}>
                         {content}
@@ -619,8 +638,15 @@ const HighlightedText: React.FC<{
                                      </span>
                                 </HoverCardTrigger>
                                 <HoverCardContent side="top" className="w-64 bg-amber-50 border-amber-200 text-amber-900 shadow-xl">
-                                    <div className="font-bold text-xs border-b border-amber-200 pb-1 mb-1 flex items-center gap-2">
-                                        <StickyNote size={12}/> Annotation #{primaryMemo.number}
+                                    <div className="font-bold text-xs border-b border-amber-200 pb-1 mb-1 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <StickyNote size={12}/> Annotation #{primaryMemo.number}
+                                        </div>
+                                        {author && (
+                                            <Avatar className="h-4 w-4">
+                                                <AvatarFallback style={{ backgroundColor: author.color, color: 'white', fontSize: '8px' }}>{author.initials}</AvatarFallback>
+                                            </Avatar>
+                                        )}
                                     </div>
                                     <div className="text-xs italic mb-2 text-amber-800/70">"{primaryMemo.segment?.text || primaryMemo.title}"</div>
                                     <div className="text-sm font-medium leading-relaxed">{primaryMemo.content}</div>
