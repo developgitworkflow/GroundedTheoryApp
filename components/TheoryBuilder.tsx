@@ -14,7 +14,7 @@ import {
     Quote, 
     ChevronRight, 
     ChevronDown, 
-    StickyNote,
+    StickyNote, 
     Lightbulb,
     Plus,
     Network,
@@ -22,7 +22,8 @@ import {
     Edit,
     Trash2,
     Save,
-    X
+    X,
+    CheckCircle2
 } from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
@@ -42,7 +43,7 @@ interface TheoryBuilderProps {
   researchQuestions: ResearchQuestion[];
   onSetCoreCategory: (codeId: string) => void;
   onAddMemo: (title: string, content: string) => void;
-  onAddFinding?: (title: string, content: string) => void;
+  onAddFinding?: (title: string, content: string, relatedIds?: string[]) => void;
   onUpdateMemo: (id: string, updates: Partial<Memo>) => void;
   onDeleteMemo?: (id: string) => void;
   onCreateCode: (name: string, kind: 'code' | 'category') => void;
@@ -77,7 +78,10 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   const [isCreatingFinding, setIsCreatingFinding] = useState(false);
   const [newFindingTitle, setNewFindingTitle] = useState('');
   const [newFindingContent, setNewFindingContent] = useState('');
+  const [newFindingCategoryIds, setNewFindingCategoryIds] = useState<string[]>([]);
+  
   const [editingFindingId, setEditingFindingId] = useState<string | null>(null);
+  const [editingFindingCategoryIds, setEditingFindingCategoryIds] = useState<string[]>([]);
 
   const coreCode = codes.find(c => c.id === selectedCoreId);
   const categories = codes.filter(c => c.kind === 'category');
@@ -142,13 +146,37 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
       }
   };
 
+  const toggleNewFindingCategory = (catId: string) => {
+      setNewFindingCategoryIds(prev => 
+          prev.includes(catId) 
+              ? prev.filter(id => id !== catId)
+              : [...prev, catId]
+      );
+  };
+
   const submitNewFinding = () => {
       if (newFindingTitle && newFindingContent && onAddFinding) {
-          onAddFinding(newFindingTitle, newFindingContent);
+          onAddFinding(newFindingTitle, newFindingContent, newFindingCategoryIds);
           setNewFindingTitle('');
           setNewFindingContent('');
+          setNewFindingCategoryIds([]);
           setIsCreatingFinding(false);
       }
+  };
+
+  const startEditingFinding = (finding: Memo) => {
+      setEditingFindingId(finding.id);
+      // Initialize with existing related IDs that are categories
+      const currentCatIds = finding.relatedIds.filter(id => categories.some(c => c.id === id));
+      setEditingFindingCategoryIds(currentCatIds);
+  };
+
+  const toggleEditingFindingCategory = (catId: string) => {
+      setEditingFindingCategoryIds(prev => 
+          prev.includes(catId) 
+              ? prev.filter(id => id !== catId)
+              : [...prev, catId]
+      );
   };
 
   return (
@@ -228,6 +256,29 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                         onChange={(e) => setNewFindingContent(e.target.value)}
                                         className="w-full h-32 bg-zinc-900 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500"
                                     />
+                                    
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold uppercase text-zinc-500">Ground in Categories</label>
+                                        <div className="flex flex-wrap gap-2 p-3 bg-zinc-900/50 rounded border border-zinc-800">
+                                            {categories.length === 0 && <span className="text-xs text-zinc-500 italic">No categories defined yet.</span>}
+                                            {categories.map(cat => (
+                                                <React.Fragment key={cat.id}>
+                                                <Badge 
+                                                    variant={newFindingCategoryIds.includes(cat.id) ? "default" : "outline"}
+                                                    className={cn(
+                                                        "cursor-pointer transition-all hover:brightness-110",
+                                                        newFindingCategoryIds.includes(cat.id) ? "border-transparent text-white" : "border-zinc-700 bg-transparent"
+                                                    )}
+                                                    onClick={() => toggleNewFindingCategory(cat.id)}
+                                                    style={newFindingCategoryIds.includes(cat.id) ? { backgroundColor: cat.color } : { color: cat.color, borderColor: cat.color }}
+                                                >
+                                                    {newFindingCategoryIds.includes(cat.id) && <CheckCircle2 size={10} className="mr-1 inline" />}
+                                                    {cat.name}
+                                                </Badge>
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </CardContent>
                                 <CardFooter className="flex justify-end gap-2 border-t border-zinc-800/50 pt-4">
                                     <Button variant="ghost" onClick={() => setIsCreatingFinding(false)}>Cancel</Button>
@@ -250,7 +301,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                         <div className="p-4 space-y-4">
                                             <Input 
                                                 defaultValue={finding.title}
-                                                onChange={(e) => finding.title = e.target.value} // Temporary mutation for this interaction
+                                                onChange={(e) => finding.title = e.target.value} // Temporary mutation for immediate UI feedback before save
                                                 className="bg-zinc-950 border-zinc-700 font-bold"
                                             />
                                             <textarea 
@@ -258,10 +309,39 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                                 onChange={(e) => finding.content = e.target.value}
                                                 className="w-full h-32 bg-zinc-950 border border-zinc-700 rounded-md p-3 text-sm text-zinc-200 resize-none"
                                             />
+                                            
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase text-zinc-500">Related Categories</label>
+                                                <div className="flex flex-wrap gap-2 p-2 bg-zinc-950/50 rounded border border-zinc-800">
+                                                    {categories.map(cat => (
+                                                        <React.Fragment key={cat.id}>
+                                                        <Badge 
+                                                            variant={editingFindingCategoryIds.includes(cat.id) ? "default" : "outline"}
+                                                            className="cursor-pointer"
+                                                            onClick={() => toggleEditingFindingCategory(cat.id)}
+                                                            style={editingFindingCategoryIds.includes(cat.id) ? { backgroundColor: cat.color } : { color: cat.color, borderColor: cat.color }}
+                                                        >
+                                                            {editingFindingCategoryIds.includes(cat.id) && <CheckCircle2 size={10} className="mr-1 inline" />}
+                                                            {cat.name}
+                                                        </Badge>
+                                                        </React.Fragment>
+                                                    ))}
+                                                </div>
+                                            </div>
+
                                             <div className="flex justify-end gap-2">
                                                 <Button variant="ghost" size="sm" onClick={() => setEditingFindingId(null)}>Cancel</Button>
                                                 <Button variant="brand" size="sm" onClick={() => {
-                                                    onUpdateMemo(finding.id, { title: finding.title, content: finding.content });
+                                                    // Preserve non-category related IDs (like RQs) if needed, but for now we replace the category portion
+                                                    // A simple merge strategy: keep existing non-category IDs, replace category IDs
+                                                    const otherIds = finding.relatedIds.filter(id => !categories.some(c => c.id === id));
+                                                    const newRelatedIds = [...otherIds, ...editingFindingCategoryIds];
+                                                    
+                                                    onUpdateMemo(finding.id, { 
+                                                        title: finding.title, 
+                                                        content: finding.content,
+                                                        relatedIds: newRelatedIds
+                                                    });
                                                     setEditingFindingId(null);
                                                 }}>
                                                     <Save size={14} className="mr-2"/> Save
@@ -274,7 +354,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                             <div className="flex justify-between items-start">
                                                 <h3 className="font-bold text-zinc-200">{finding.title}</h3>
                                                 <div className="flex gap-1">
-                                                    <Button size="icon" variant="ghost" onClick={() => setEditingFindingId(finding.id)} className="h-8 w-8 text-zinc-500 hover:text-white">
+                                                    <Button size="icon" variant="ghost" onClick={() => startEditingFinding(finding)} className="h-8 w-8 text-zinc-500 hover:text-white">
                                                         <Edit size={14} />
                                                     </Button>
                                                     <Button size="icon" variant="ghost" onClick={() => onDeleteMemo && onDeleteMemo(finding.id)} className="h-8 w-8 text-zinc-500 hover:text-red-500">
@@ -285,13 +365,25 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                             <p className="text-sm text-zinc-400 leading-relaxed whitespace-pre-wrap">
                                                 {finding.content}
                                             </p>
-                                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800/50">
+                                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800/50 flex-wrap">
                                                 <span className="text-[10px] text-zinc-600 font-mono">ID: {finding.id}</span>
-                                                <div className="flex gap-1 ml-auto">
+                                                <div className="flex flex-wrap gap-1 ml-auto">
                                                     {finding.relatedIds.length > 0 ? (
-                                                        <Badge variant="secondary" className="text-[10px] h-5 bg-zinc-800 text-zinc-400">
-                                                            {finding.relatedIds.length} Linked Items
-                                                        </Badge>
+                                                        finding.relatedIds.map(rid => {
+                                                            const linkedCat = categories.find(c => c.id === rid);
+                                                            if (linkedCat) {
+                                                                return (
+                                                                    <React.Fragment key={rid}>
+                                                                    <Badge variant="outline" className="text-[10px] h-5 border-zinc-700 bg-zinc-900/50" style={{ color: linkedCat.color, borderColor: linkedCat.color + '40' }}>
+                                                                        <div className="w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: linkedCat.color }} />
+                                                                        {linkedCat.name}
+                                                                    </Badge>
+                                                                    </React.Fragment>
+                                                                );
+                                                            }
+                                                            // Could render generic badge for RQs here if we had RQ list handy, but skipping for minimal change
+                                                            return null;
+                                                        })
                                                     ) : (
                                                         <Badge variant="outline" className="text-[10px] h-5 border-amber-900 text-amber-600">Unmapped</Badge>
                                                     )}

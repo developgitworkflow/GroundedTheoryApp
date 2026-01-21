@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool } from '../types';
+import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool, Memo } from '../types';
 import { downloadBibFile } from '../lib/bibUtils';
 import { 
   Settings, 
@@ -25,7 +25,8 @@ import {
   Microscope,
   PersonStanding,
   Upload,
-  Download
+  Download,
+  Lightbulb
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -39,7 +40,9 @@ interface SettingsDialogProps {
   onClose: () => void;
   settings: ProjectSettings;
   team?: ResearchTeam;
-  onSave: (settings: ProjectSettings, team?: ResearchTeam) => void;
+  memos?: Memo[];
+  activeResearcherId?: string;
+  onSave: (settings: ProjectSettings, team?: ResearchTeam, memos?: Memo[]) => void;
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ 
@@ -47,17 +50,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   onClose, 
   settings, 
   team,
+  memos = [],
+  activeResearcherId,
   onSave 
 }) => {
   const [localSettings, setLocalSettings] = useState<ProjectSettings>(settings);
   const [localTeam, setLocalTeam] = useState<ResearchTeam>(team || { id: 'default', researchers: [], consensusCriteria: [] });
+  const [localMemos, setLocalMemos] = useState<Memo[]>(memos);
   const [activeTab, setActiveTab] = useState('general');
   const bibFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
-    onSave(localSettings, localTeam);
+    onSave(localSettings, localTeam, localMemos);
     onClose();
   };
 
@@ -234,6 +240,31 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     }));
   };
 
+  // --- Findings Handlers ---
+  const addFinding = () => {
+      const newFinding: Memo = {
+          id: `finding-${Date.now()}`,
+          title: 'New Finding',
+          content: 'Description of the finding...',
+          type: 'finding',
+          relatedIds: [],
+          createdAt: new Date().toISOString(),
+          number: localMemos.length + 1,
+          authorId: activeResearcherId
+      };
+      setLocalMemos(prev => [...prev, newFinding]);
+  };
+
+  const updateFinding = (id: string, updates: Partial<Memo>) => {
+      setLocalMemos(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  };
+
+  const removeFinding = (id: string) => {
+      setLocalMemos(prev => prev.filter(m => m.id !== id));
+  };
+
+  const findings = localMemos.filter(m => m.type === 'finding');
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <input 
@@ -305,6 +336,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     onClick={() => setActiveTab('resources')} 
                     icon={Wrench} 
                     label="Tools & Refs" 
+                />
+                <NavButton 
+                    active={activeTab === 'findings'} 
+                    onClick={() => setActiveTab('findings')} 
+                    icon={Lightbulb} 
+                    label="Emergent Findings" 
                 />
 
                 <div className="h-px bg-zinc-800 my-2 mx-2" />
@@ -494,6 +531,46 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                     </div>
                                 ))}
                              </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'findings' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-start">
+                             <SectionHeader title="Emergent Findings" description="Key insights and theoretical propositions." />
+                             <Button size="xs" variant="brand" onClick={addFinding} className="gap-2"><Plus size={14}/> Add Finding</Button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            {findings.length === 0 && <p className="text-zinc-500 text-sm italic border border-dashed border-zinc-800 p-8 text-center rounded-lg">No findings recorded yet.</p>}
+                            {findings.map(finding => (
+                                <div key={finding.id} className="p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-3 relative group">
+                                    <div className="flex justify-between items-start">
+                                        <div className="space-y-1 flex-1 mr-4">
+                                            <label className="text-[10px] text-zinc-500 uppercase font-bold">Title</label>
+                                            <Input 
+                                                value={finding.title}
+                                                onChange={(e) => updateFinding(finding.id, { title: e.target.value })}
+                                                className="bg-zinc-950 font-medium"
+                                                placeholder="Finding Title"
+                                            />
+                                        </div>
+                                        <Button size="icon" variant="ghost" onClick={() => removeFinding(finding.id)} className="h-8 w-8 text-zinc-600 hover:text-red-500 mt-6">
+                                            <Trash2 size={14} />
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-zinc-500 uppercase font-bold">Content</label>
+                                        <Textarea 
+                                            value={finding.content}
+                                            onChange={(e) => updateFinding(finding.id, { content: e.target.value })}
+                                            className="bg-zinc-950 min-h-[80px]"
+                                            placeholder="Description..."
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}

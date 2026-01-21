@@ -448,12 +448,12 @@ export default function App() {
       addJournalEntry(`Updated Theory Artefact Content: ${title}`, 'auto');
   };
 
-  const handleAddFinding = (title: string, content: string) => {
+  const handleAddFinding = (title: string, content: string, relatedIds: string[] = []) => {
       const newMemo: Memo = {
           id: `finding-${Date.now()}`,
           title,
           content,
-          relatedIds: [],
+          relatedIds: relatedIds,
           createdAt: new Date().toISOString(),
           type: 'finding',
           number: memos.length + 1,
@@ -493,10 +493,13 @@ export default function App() {
     setEditMemoContent('');
   };
 
-  const handleSaveSettings = (newSettings: ProjectSettings, updatedTeam?: ResearchTeam) => {
+  const handleSaveSettings = (newSettings: ProjectSettings, updatedTeam?: ResearchTeam, updatedMemos?: Memo[]) => {
     setProjectSettings(newSettings);
     if (updatedTeam) {
         setResearchTeam(updatedTeam);
+    }
+    if (updatedMemos) {
+        setMemos(updatedMemos);
     }
     setTheoryArtefact(prev => ({ ...prev, type: newSettings.theoryType }));
     addJournalEntry(`Updated project settings and team configuration`, 'auto');
@@ -758,6 +761,8 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         settings={projectSettings}
         team={researchTeam}
+        memos={memos}
+        activeResearcherId={activeResearcherId}
         onSave={handleSaveSettings}
       />
 
