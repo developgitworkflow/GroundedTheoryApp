@@ -1,3 +1,4 @@
+
 export interface Project {
   id: string;
   name: string;
@@ -47,6 +48,11 @@ export interface Memo {
   relatedIds: string[]; // Can relate to Artifact, Code, or Coding
   createdAt: string;
   type: 'theoretical' | 'procedural' | 'observational';
+  segment?: {
+    start: number;
+    end: number;
+    text: string;
+  };
 }
 
 export interface JournalEntry {
@@ -73,4 +79,13 @@ export enum LayerType {
 export interface Point {
   x: number;
   y: number;
+}
+
+export interface ProjectSettings {
+  projectName: string;
+  userName: string;
+  themeMode: 'dark' | 'light'; // Currently locked to dark in UI but good for schema
+  stripeWidth: number; // MAXQDA visual setting
+  aiModel: 'gemini-3-flash-preview' | 'gemini-3-pro-preview'; // Atlas.ti AI setting
+  stopWords: string[]; // Atlas.ti Analysis setting
 }

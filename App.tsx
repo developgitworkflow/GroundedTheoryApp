@@ -4,8 +4,10 @@ import { ArtifactView } from './components/ArtifactView';
 import { TheoryGraph } from './components/TheoryGraph';
 import { ReflexivityJournal } from './components/ReflexivityJournal';
 import { TheoryBuilder } from './components/TheoryBuilder';
-import { CurationWorkflow } from './components/CurationWorkflow'; // New Import
-import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry } from './types';
+import { CurationWorkflow } from './components/CurationWorkflow'; 
+import { MemoDirectory } from './components/MemoDirectory'; 
+import { SettingsDialog } from './components/SettingsDialog'; // New Import
+import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings } from './types';
 import { 
   FilePlus, 
   Settings, 
@@ -13,7 +15,10 @@ import {
   BrainCircuit,
   Search,
   Plus,
-  BookMarked
+  BookMarked,
+  StickyNote,
+  X,
+  Tag
 } from 'lucide-react';
 
 // Design System Components
@@ -80,6 +85,15 @@ const INITIAL_CODINGS: Coding[] = [
   { id: 'cd3', artifactId: 'a1', codeId: 'c4', start: 209, end: 236, textSnippet: "management didn't trust us" },
 ];
 
+const INITIAL_SETTINGS: ProjectSettings = {
+  projectName: "Remote Work Study",
+  userName: "Researcher",
+  themeMode: "dark",
+  stripeWidth: 4,
+  aiModel: "gemini-3-flash-preview",
+  stopWords: ["the", "and", "is", "of", "to", "in", "it", "that", "was"]
+};
+
 export default function App() {
   const [layers, setLayers] = useState<LayerConfig[]>(INITIAL_LAYERS);
   const [artifacts, setArtifacts] = useState<Artifact[]>(INITIAL_ARTIFACTS);
@@ -90,6 +104,16 @@ export default function App() {
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [activeTab, setActiveTab] = useState('curate'); // Start at curation
   const [isJournalOpen, setIsJournalOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState('codes'); // Right sidebar state
+  const [codeSearchTerm, setCodeSearchTerm] = useState('');
+
+  // Settings State
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(INITIAL_SETTINGS);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Global Edit State
+  const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
+  const [editMemoContent, setEditMemoContent] = useState('');
 
   // Derived state
   const activeArtifact = artifacts.find(a => a.id === activeArtifactId) || artifacts[0];
@@ -97,6 +121,10 @@ export default function App() {
     acc[layer.id] = layer.visible;
     return acc;
   }, {} as Record<LayerType, boolean>);
+  
+  const filteredCodes = codes.filter(c => 
+    c.name.toLowerCase().includes(codeSearchTerm.toLowerCase())
+  );
 
   // Helper to add log
   const addJournalEntry = (content: string, type: 'auto' | 'manual' = 'manual') => {
@@ -175,14 +203,15 @@ export default function App() {
     return newCode;
   };
 
-  const handleAddMemo = (snippet: string, content: string) => {
+  const handleAddMemo = (snippet: string, content: string, range?: { start: number, end: number }) => {
       const newMemo: Memo = {
           id: `memo-${Date.now()}`,
           title: snippet.substring(0, 15) + (snippet.length > 15 ? '...' : ''),
           content,
           relatedIds: [activeArtifact.id],
           createdAt: new Date().toISOString(),
-          type: 'observational'
+          type: 'observational',
+          segment: range ? { start: range.start, end: range.end, text: snippet } : undefined
       };
       setMemos(prev => [...prev, newMemo]);
       addJournalEntry(`Added observational memo on "${newMemo.title}"`, 'auto');
@@ -224,6 +253,26 @@ export default function App() {
     console.log("Clicked code:", codeId);
   };
 
+  // Edit Handlers
+  const openMemoEditor = (memo: Memo) => {
+      setEditingMemo(memo);
+      setEditMemoContent(memo.content);
+  };
+
+  const saveEditedMemo = () => {
+    if (editingMemo) {
+      handleUpdateMemo(editingMemo.id, editMemoContent);
+    }
+    setEditingMemo(null);
+    setEditMemoContent('');
+  };
+
+  // Handle Settings Save
+  const handleSaveSettings = (newSettings: ProjectSettings) => {
+    setProjectSettings(newSettings);
+    addJournalEntry(`Updated project settings`, 'auto');
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
       {/* Header */}
@@ -234,7 +283,7 @@ export default function App() {
              <span className="font-bold text-xl tracking-tight text-white">STRATUM</span>
           </div>
           <Badge variant="secondary" className="font-normal text-zinc-400 border-zinc-800">
-            Project: Remote Work Study
+            Project: {projectSettings.projectName}
           </Badge>
         </div>
         
@@ -251,7 +300,12 @@ export default function App() {
                 <Download size={16} /> Export
             </Button>
             <div className="w-px h-6 bg-zinc-800 mx-2"></div>
-            <Button variant="ghost" size="icon" className="rounded-full text-zinc-400">
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                className="rounded-full text-zinc-400"
+                onClick={() => setIsSettingsOpen(true)}
+            >
                 <Settings size={20} />
             </Button>
         </div>
@@ -317,7 +371,7 @@ export default function App() {
                                 onAddCoding={handleAddCoding}
                                 onCreateCode={handleCreateCode}
                                 onAddMemo={handleAddMemo}
-                                onUpdateMemo={handleUpdateMemo}
+                                onEditMemo={openMemoEditor} 
                             />
                             )}
 
@@ -348,51 +402,86 @@ export default function App() {
                 </TabsContent>
             </div>
 
-            {/* Right: Code Manager (Only visible in Analysis Mode) */}
+            {/* Right: Sidebar (Tabs for Codes / Memos) - Only in Analysis Mode */}
             {activeTab === 'analyze' && (
-                <div className="w-72 bg-zinc-900 border-l border-zinc-800 flex flex-col z-20 shadow-xl">
-                    <div className="p-4 border-b border-zinc-800 bg-zinc-950">
-                        <h3 className="font-bold text-zinc-200 text-sm uppercase tracking-wider">Codebook</h3>
-                    </div>
-                    
-                    <div className="p-3 border-b border-zinc-800">
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
-                            <Input 
-                                className="pl-8 h-9 bg-zinc-950 border-zinc-800" 
-                                placeholder="Filter codes..." 
-                            />
+                <div className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col z-20 shadow-xl overflow-hidden">
+                    <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col">
+                        <div className="flex items-center justify-center p-2 bg-zinc-950 border-b border-zinc-800">
+                             <TabsList className="bg-zinc-900 grid grid-cols-2 w-full">
+                                <TabsTrigger value="codes" className="text-xs gap-2"><Tag size={12}/> Codes</TabsTrigger>
+                                <TabsTrigger value="memos" className="text-xs gap-2"><StickyNote size={12}/> Directory</TabsTrigger>
+                             </TabsList>
                         </div>
-                    </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                        {codes.map(code => (
-                        <div key={code.id} className="group flex items-center justify-between p-2.5 rounded-md hover:bg-zinc-800 cursor-pointer transition-all">
-                            <div className="flex items-center gap-2.5">
-                            <div className={cn("w-2.5 h-2.5 rounded-full ring-2 ring-offset-1 ring-offset-zinc-900", code.isCore ? "ring-yellow-500" : "ring-transparent")} style={{ backgroundColor: code.color }}></div>
-                            <span className={cn("text-sm font-medium", code.isCore ? "text-yellow-500" : "text-zinc-300")}>
-                                {code.name}
-                            </span>
+                        {/* TAB 1: CODEBOOK */}
+                        <TabsContent value="codes" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
+                             <div className="p-3 border-b border-zinc-800">
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
+                                    <Input 
+                                        className="pl-8 h-9 bg-zinc-950 border-zinc-800" 
+                                        placeholder="Filter codes..." 
+                                        value={codeSearchTerm}
+                                        onChange={(e) => setCodeSearchTerm(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                            <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-zinc-950 text-zinc-500 border border-zinc-800">
-                                {codings.filter(c => c.codeId === code.id).length}
-                            </Badge>
-                        </div>
-                        ))}
-                    </div>
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                <div className="flex flex-wrap gap-2 content-start">
+                                    {filteredCodes.map(code => (
+                                        <Badge 
+                                            key={code.id}
+                                            variant="outline"
+                                            className={cn(
+                                                "pl-2 pr-2.5 py-1 gap-1.5 cursor-pointer transition-all hover:bg-zinc-800",
+                                                code.isCore ? "ring-1 ring-yellow-500/50" : "border-zinc-800"
+                                            )}
+                                            style={{ 
+                                                borderColor: code.isCore ? undefined : `${code.color}40`,
+                                                backgroundColor: `${code.color}10`,
+                                                color: '#e4e4e7' // zinc-200
+                                            }}
+                                            onClick={() => handleNodeClick(code.id)}
+                                        >
+                                            <div className="w-1.5 h-1.5 rounded-full shadow-[0_0_4px_currentColor]" style={{ backgroundColor: code.color, color: code.color }} />
+                                            <span className="font-medium text-xs">{code.name}</span>
+                                            {code.isCore && <span className="text-[8px] text-yellow-500 ml-1">★</span>}
+                                            <span className="ml-0.5 text-[9px] opacity-50 font-mono">
+                                                {codings.filter(c => c.codeId === code.id).length}
+                                            </span>
+                                        </Badge>
+                                    ))}
+                                    
+                                    {filteredCodes.length === 0 && (
+                                        <div className="w-full text-center py-8 text-zinc-500 text-xs">
+                                            No codes found matching "{codeSearchTerm}".
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                             <div className="p-4 bg-zinc-950 border-t border-zinc-800 mt-auto">
+                                <Button 
+                                    variant="secondary"
+                                    className="w-full gap-2 text-zinc-400 hover:text-white"
+                                    onClick={() => {
+                                        const name = prompt("Enter new code name:");
+                                        if(name) handleCreateCode(name);
+                                    }}
+                                >
+                                    <Plus size={14} /> Create New Code
+                                </Button>
+                            </div>
+                        </TabsContent>
 
-                    <div className="p-4 bg-zinc-950 border-t border-zinc-800">
-                        <Button 
-                            variant="secondary"
-                            className="w-full gap-2 text-zinc-400 hover:text-white"
-                            onClick={() => {
-                                const name = prompt("Enter new code name:");
-                                if(name) handleCreateCode(name);
-                            }}
-                        >
-                            <Plus size={14} /> Create New Code
-                        </Button>
-                    </div>
+                        {/* TAB 2: MEMO DIRECTORY */}
+                        <TabsContent value="memos" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
+                            <MemoDirectory 
+                                memos={memos}
+                                artifacts={artifacts}
+                                onSelectMemo={openMemoEditor}
+                            />
+                        </TabsContent>
+                    </Tabs>
                 </div>
             )}
         </div>
@@ -404,6 +493,47 @@ export default function App() {
             isOpen={isJournalOpen}
             onClose={() => setIsJournalOpen(false)}
         />
+    
+      {/* Settings Dialog */}
+      <SettingsDialog 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={projectSettings}
+        onSave={handleSaveSettings}
+      />
+
+      {/* Global Memo Editor Dialog */}
+      {editingMemo && (
+             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                 <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl w-[400px] animate-in fade-in zoom-in-95 overflow-hidden">
+                     <div className="flex items-center justify-between p-3 border-b border-zinc-800 bg-zinc-950">
+                        <div className="flex items-center gap-2">
+                             <StickyNote size={16} className="text-amber-500" />
+                             <span className="font-semibold text-zinc-200 text-sm">Edit Annotation</span>
+                        </div>
+                        <button onClick={() => setEditingMemo(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
+                     </div>
+                     <div className="p-4 space-y-4">
+                         <div>
+                             <label className="text-[10px] uppercase text-zinc-500 font-bold">Title/Ref</label>
+                             <div className="text-zinc-300 text-sm border-b border-zinc-800 pb-1">{editingMemo.title}</div>
+                         </div>
+                         <div>
+                             <label className="text-[10px] uppercase text-zinc-500 font-bold mb-1 block">Content</label>
+                             <textarea 
+                                className="w-full h-32 bg-zinc-950/50 border border-zinc-700 rounded p-2 text-sm text-zinc-200 resize-none focus:outline-none focus:border-amber-500"
+                                value={editMemoContent}
+                                onChange={(e) => setEditMemoContent(e.target.value)}
+                             />
+                         </div>
+                     </div>
+                     <div className="p-3 bg-zinc-950 border-t border-zinc-800 flex justify-end gap-2">
+                         <Button variant="ghost" size="sm" onClick={() => setEditingMemo(null)}>Cancel</Button>
+                         <Button variant="brand" size="sm" onClick={saveEditedMemo} className="bg-amber-600 hover:bg-amber-700 text-white">Save Changes</Button>
+                     </div>
+                 </div>
+             </div>
+        )}
     </div>
   );
 }

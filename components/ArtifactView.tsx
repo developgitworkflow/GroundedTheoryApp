@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
 import { Badge } from './ui/badge';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut } from './ui/command';
 
 interface ArtifactViewProps {
   artifact: Artifact;
@@ -15,7 +16,8 @@ interface ArtifactViewProps {
   layersVisible: Record<LayerType, boolean>;
   onAddCoding: (coding: Omit<Coding, 'id'>) => void;
   onCreateCode: (name: string) => Promise<Code>;
-  onAddMemo?: (snippet: string, content: string) => void;
+  onAddMemo?: (snippet: string, content: string, range?: {start: number, end: number}) => void;
+  onEditMemo?: (memo: Memo) => void;
   onUpdateMemo?: (id: string, content: string) => void;
 }
 
@@ -28,21 +30,15 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   onAddCoding,
   onCreateCode,
   onAddMemo,
-  onUpdateMemo
+  onEditMemo
 }) => {
   const [selection, setSelection] = useState<{start: number, end: number, text: string, rect: DOMRect} | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestedCodesList, setSuggestedCodesList] = useState<string[]>([]);
   const [memoInput, setMemoInput] = useState('');
   const [showMemoInput, setShowMemoInput] = useState(false);
-  const [codeSearchTerm, setCodeSearchTerm] = useState('');
   
-  // Memo Editing State
-  const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
-  const [editMemoContent, setEditMemoContent] = useState('');
-
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   // --- Data Preparation ---
 
@@ -69,17 +65,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     });
   }, [artifact.content]);
 
-  // Filter existing codes based on search
-  const filteredCodes = useMemo(() => {
-      if (!codeSearchTerm) return codes;
-      return codes.filter(c => c.name.toLowerCase().includes(codeSearchTerm.toLowerCase()));
-  }, [codes, codeSearchTerm]);
-
   // Focus input on selection
   useEffect(() => {
-      if (selection && inputRef.current && !showMemoInput) {
-          inputRef.current.focus();
-      }
+      // Logic handled by CommandInput autoFocus
   }, [selection, showMemoInput]);
 
   // --- Selection Logic ---
@@ -126,14 +114,12 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             });
             setShowMemoInput(false);
             setSuggestedCodesList([]);
-            setCodeSearchTerm('');
         }
     }
   };
 
   const clearSelection = () => {
       setSelection(null);
-      setCodeSearchTerm('');
   };
 
   // --- Action Handlers ---
@@ -177,22 +163,13 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
   const saveMemo = () => {
     if (!selection || !onAddMemo) return;
-    onAddMemo(selection.text, memoInput);
+    onAddMemo(selection.text, memoInput, { start: selection.start, end: selection.end });
     setMemoInput('');
     clearSelection();
   };
 
   const handleEditMemoClick = (memo: Memo) => {
-    setEditingMemo(memo);
-    setEditMemoContent(memo.content);
-  };
-
-  const saveEditedMemo = () => {
-    if (editingMemo && onUpdateMemo) {
-      onUpdateMemo(editingMemo.id, editMemoContent);
-    }
-    setEditingMemo(null);
-    setEditMemoContent('');
+    if (onEditMemo) onEditMemo(memo);
   };
 
   return (
@@ -201,7 +178,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         {/* Helper Toolbar (Floating) for New Selection */}
         {selection && (
             <div 
-                className="fixed z-50 bg-zinc-900 border border-zinc-700 shadow-2xl rounded-lg w-[340px] animate-in fade-in zoom-in-95 flex flex-col overflow-hidden"
+                className="fixed z-50 bg-zinc-950 border border-zinc-700 shadow-2xl rounded-lg w-[340px] animate-in fade-in zoom-in-95 flex flex-col overflow-hidden"
                 style={{ 
                     top: Math.min(window.innerHeight - 400, Math.max(10, selection.rect.top - 180)), 
                     left: Math.min(window.innerWidth - 360, Math.max(10, selection.rect.left)) 
@@ -209,20 +186,20 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             >
                 <div className="flex items-center justify-between p-2 px-3 border-b border-zinc-800 bg-zinc-950">
                     <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                        <Tag size={12} className="text-blue-500"/> Coding Assistant
+                        <CommandIcon size={12} className="text-blue-500"/> Coding Palette
                     </span>
                     <button onClick={clearSelection} className="text-zinc-500 hover:text-white"><X size={14} /></button>
                 </div>
 
-                <div className="p-3 space-y-3">
+                <div className="p-1">
                      {/* Quote Preview */}
-                     <div className="text-xs text-zinc-300 italic border-l-2 border-blue-500 pl-3 line-clamp-2 bg-zinc-900/50 py-2 rounded-r">
+                     <div className="px-3 py-2 text-xs text-zinc-300 italic border-l-2 border-blue-500 ml-1 mb-2 line-clamp-2 bg-zinc-900/50 rounded-r">
                         "{selection.text}"
                      </div>
 
                      {/* Top Actions */}
                      {!showMemoInput && (
-                         <div className="flex gap-2">
+                         <div className="flex gap-2 px-2 mb-2">
                             <Button 
                                 size="xs" 
                                 variant="secondary" 
@@ -245,95 +222,60 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                         </div>
                      )}
 
-                     {/* Coding Interface */}
+                     {/* Coding Interface via Command Component */}
                      {!showMemoInput && (
-                         <div className="space-y-3">
-                             {/* Search / Input */}
-                             <div className="relative">
-                                <Search className="absolute left-2 top-2 text-zinc-500" size={14} />
-                                <input 
-                                    ref={inputRef}
-                                    className="w-full bg-zinc-950 border border-zinc-800 rounded-md pl-8 pr-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-600"
-                                    placeholder="Find or create code..."
-                                    value={codeSearchTerm}
-                                    onChange={(e) => setCodeSearchTerm(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            if (filteredCodes.length > 0 && codeSearchTerm === '') {
-                                                // If enter pressed with empty search, maybe select first? No, requires explicit action.
-                                            } else if (filteredCodes.length === 1 && filteredCodes[0].name.toLowerCase() === codeSearchTerm.toLowerCase()) {
-                                                applyCode(filteredCodes[0].name, filteredCodes[0].id);
-                                            } else {
-                                                applyCode(codeSearchTerm);
-                                            }
-                                        }
-                                    }}
-                                />
-                             </div>
-
-                             <div className="max-h-[220px] overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-                                 {/* AI Suggestions Section */}
+                         <Command className="border-none bg-transparent">
+                             <CommandInput placeholder="Search codebook..." autoFocus />
+                             <CommandList>
+                                 <CommandEmpty className="py-2 text-xs text-zinc-500">
+                                     No matching codes found. Use Create.
+                                 </CommandEmpty>
+                                 
+                                 {/* AI Suggestions Group */}
                                  {suggestedCodesList.length > 0 && (
-                                     <div className="space-y-1.5">
-                                         <div className="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider px-1">Magic Suggestions</div>
-                                         <div className="flex flex-wrap gap-1.5">
-                                             {suggestedCodesList.map(c => (
-                                                 <button 
-                                                     key={c}
-                                                     onClick={() => applyCode(c)}
-                                                     className="px-2 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded text-[11px] hover:bg-indigo-500/20 transition-colors flex items-center gap-1 group"
-                                                 >
-                                                     <Wand2 size={10} className="opacity-50 group-hover:opacity-100" /> {c}
-                                                 </button>
-                                             ))}
-                                         </div>
-                                     </div>
-                                 )}
-
-                                 {/* Create New Action */}
-                                 {codeSearchTerm && !codes.some(c => c.name.toLowerCase() === codeSearchTerm.toLowerCase()) && (
-                                    <button 
-                                        onClick={() => applyCode(codeSearchTerm)}
-                                        className="w-full text-left px-2 py-1.5 bg-blue-600/10 border border-blue-600/30 hover:bg-blue-600/20 text-blue-300 rounded text-xs flex items-center gap-2 transition-colors"
-                                    >
-                                        <Plus size={12} />
-                                        Create new code: <span className="font-bold">"{codeSearchTerm}"</span>
-                                    </button>
-                                 )}
-
-                                 {/* Existing Codebook Section */}
-                                 <div className="space-y-1">
-                                     <div className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider px-1 flex justify-between">
-                                        <span>Codebook</span>
-                                        <span className="text-zinc-600">{filteredCodes.length} found</span>
-                                     </div>
-                                     <div className="grid grid-cols-1 gap-1">
-                                         {filteredCodes.map(code => (
-                                             <button 
-                                                 key={code.id}
-                                                 onClick={() => applyCode(code.name, code.id)}
-                                                 className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 transition-colors text-left group"
-                                             >
-                                                 <div className="w-2.5 h-2.5 rounded-full ring-1 ring-white/10" style={{ backgroundColor: code.color }}></div>
-                                                 <span className="text-xs text-zinc-300 group-hover:text-white truncate flex-1">{code.name}</span>
-                                                 {code.isCore && <span className="text-[9px] text-yellow-500 bg-yellow-950/30 px-1 rounded border border-yellow-900/50">CORE</span>}
-                                             </button>
+                                     <CommandGroup heading="AI Suggestions">
+                                         {suggestedCodesList.map(c => (
+                                             <CommandItem key={c} value={c} onSelect={() => applyCode(c)}>
+                                                 <Wand2 size={10} className="mr-2 text-indigo-400" />
+                                                 {c}
+                                             </CommandItem>
                                          ))}
-                                         {filteredCodes.length === 0 && !codeSearchTerm && (
-                                             <div className="text-xs text-zinc-600 px-2 italic">No codes in codebook yet.</div>
-                                         )}
-                                     </div>
-                                 </div>
-                             </div>
-                         </div>
+                                     </CommandGroup>
+                                 )}
+
+                                 {/* Codebook Group */}
+                                 <CommandGroup heading="Existing Codes">
+                                     {codes.map(code => (
+                                         <CommandItem key={code.id} value={code.name} onSelect={() => applyCode(code.name, code.id)}>
+                                             <div className="mr-2 w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
+                                             {code.name}
+                                             {code.isCore && <Badge variant="secondary" className="ml-auto h-4 px-1 text-[9px] text-yellow-500 bg-yellow-950/20">CORE</Badge>}
+                                         </CommandItem>
+                                     ))}
+                                 </CommandGroup>
+
+                                 {/* Actions Group - Always visible but typically fallback */}
+                                 <CommandGroup heading="Actions">
+                                     <CommandItem onSelect={() => {
+                                         // Fallback creation for current search (needs context, or prompt)
+                                         // Since we can't easily get search text here without ref, prompt is safer or just rely on exact matches
+                                         // For now, let's just use prompt to ensure accuracy
+                                         const name = prompt("Name for new code:");
+                                         if(name) applyCode(name);
+                                     }}>
+                                         <Plus size={12} className="mr-2" /> Create new code manually...
+                                     </CommandItem>
+                                 </CommandGroup>
+                             </CommandList>
+                         </Command>
                      )}
 
                      {/* Memo Input Mode */}
                      {showMemoInput && (
-                        <div className="space-y-2 animate-in slide-in-from-right duration-200">
+                        <div className="space-y-2 px-2 pb-2 animate-in slide-in-from-right duration-200">
                              <div className="flex items-center justify-between">
                                 <span className="text-xs text-zinc-400 font-medium">New Annotation</span>
-                                <button onClick={() => setShowMemoInput(false)} className="text-[10px] text-zinc-500 hover:text-zinc-300">Back to Coding</button>
+                                <button onClick={() => setShowMemoInput(false)} className="text-[10px] text-zinc-500 hover:text-zinc-300">Back</button>
                              </div>
                             <textarea 
                                 className="w-full h-24 bg-black/20 border border-zinc-700 rounded p-2 text-xs text-zinc-200 resize-none focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
@@ -349,39 +291,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                      )}
                 </div>
             </div>
-        )}
-
-        {/* Memo Editor Dialog (Centered Modal or Floating) */}
-        {editingMemo && (
-             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                 <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl w-[400px] animate-in fade-in zoom-in-95 overflow-hidden">
-                     <div className="flex items-center justify-between p-3 border-b border-zinc-800 bg-zinc-950">
-                        <div className="flex items-center gap-2">
-                             <StickyNote size={16} className="text-amber-500" />
-                             <span className="font-semibold text-zinc-200 text-sm">Edit Annotation</span>
-                        </div>
-                        <button onClick={() => setEditingMemo(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
-                     </div>
-                     <div className="p-4 space-y-4">
-                         <div>
-                             <label className="text-[10px] uppercase text-zinc-500 font-bold">Title/Ref</label>
-                             <div className="text-zinc-300 text-sm border-b border-zinc-800 pb-1">{editingMemo.title}</div>
-                         </div>
-                         <div>
-                             <label className="text-[10px] uppercase text-zinc-500 font-bold mb-1 block">Content</label>
-                             <textarea 
-                                className="w-full h-32 bg-zinc-950/50 border border-zinc-700 rounded p-2 text-sm text-zinc-200 resize-none focus:outline-none focus:border-amber-500"
-                                value={editMemoContent}
-                                onChange={(e) => setEditMemoContent(e.target.value)}
-                             />
-                         </div>
-                     </div>
-                     <div className="p-3 bg-zinc-950 border-t border-zinc-800 flex justify-end gap-2">
-                         <Button variant="ghost" size="sm" onClick={() => setEditingMemo(null)}>Cancel</Button>
-                         <Button variant="brand" size="sm" onClick={saveEditedMemo} className="bg-amber-600 hover:bg-amber-700 text-white">Save Changes</Button>
-                     </div>
-                 </div>
-             </div>
         )}
 
         {/* --- Main Document Browser --- */}
@@ -405,11 +314,14 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             c.start < para.end && c.end > para.start
                         );
                         
-                        // Find memos relevant to this paragraph
+                        // Find memos relevant to this paragraph (both segmented and legacy text-match)
                         const paraMemos = memos.filter(m => 
-                           m.relatedIds.includes(artifact.id) && 
-                           paraCodings.some(c => m.title.includes(codes.find(co => co.id === c.codeId)?.name || '')) ||
-                           (m.type === 'observational' && para.text.includes(m.title)) // simplified matching
+                           m.relatedIds.includes(artifact.id) && (
+                               // Check for precise segment overlap
+                               (m.segment && m.segment.start < para.end && m.segment.end > para.start) ||
+                               // Fallback to text matching for legacy/general memos
+                               (!m.segment && m.type === 'observational' && para.text.includes(m.title))
+                           )
                         );
 
                         // Unique codes for the stripe margin
@@ -470,6 +382,8 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         codings={paraCodings}
                                         codes={codes}
                                         allCodings={codings} // Pass all codings for counting stats
+                                        memos={paraMemos} // NEW: Pass memos for inline icons
+                                        layersVisible={layersVisible}
                                     />
                                 </div>
                             </div>
@@ -547,21 +461,34 @@ const HighlightedText: React.FC<{
     codings: Coding[];
     codes: Code[];
     allCodings: Coding[];
-}> = ({ text, paraStart, codings, codes, allCodings }) => {
-    if (codings.length === 0) return <>{text}</>;
-
-    // We need to slice the text based on coding boundaries relative to this paragraph
-    // Boundaries: 0 (start of para), text.length (end of para), and any start/end of coding relative to paraStart
-    const paraEnd = paraStart + text.length;
+    memos?: Memo[];
+    layersVisible: Record<LayerType, boolean>;
+}> = ({ text, paraStart, codings, codes, allCodings, memos = [], layersVisible }) => {
     
-    // Collect all split points
+    // If no layers active, just return text
+    if (codings.length === 0 && memos.length === 0) return <>{text}</>;
+
     const points = new Set<number>([0, text.length]);
+    
+    // Add coding boundaries
     codings.forEach(c => {
         const relStart = Math.max(0, c.start - paraStart);
         const relEnd = Math.min(text.length, c.end - paraStart);
         if (relStart < text.length) points.add(relStart);
         if (relEnd > 0) points.add(relEnd);
     });
+
+    // Add memo boundaries (only if layer is visible)
+    if (layersVisible[LayerType.THEORY_MEMOS]) {
+        memos.forEach(m => {
+            if (m.segment) {
+                const relStart = Math.max(0, m.segment.start - paraStart);
+                const relEnd = Math.min(text.length, m.segment.end - paraStart);
+                if (relStart < text.length) points.add(relStart);
+                if (relEnd > 0) points.add(relEnd);
+            }
+        });
+    }
 
     const sortedPoints = Array.from(points).sort((a, b) => a - b);
     const segments: React.ReactNode[] = [];
@@ -570,32 +497,45 @@ const HighlightedText: React.FC<{
         const segStart = sortedPoints[i];
         const segEnd = sortedPoints[i+1];
         const segText = text.substring(segStart, segEnd);
-        
-        // Find which codes cover this segment
         const segMidGlobal = paraStart + segStart + (segEnd - segStart) / 2;
         
+        // Check which codings cover this segment
         const activeForSegment = codings.filter(c => 
             c.start <= segMidGlobal && c.end >= segMidGlobal
         );
 
+        // Check which memos cover this segment (layer visible check done implicitly by points logic but robust check here)
+        const activeMemosForSegment = layersVisible[LayerType.THEORY_MEMOS] ? memos.filter(m => 
+            (m.segment && m.segment.start <= segMidGlobal && m.segment.end >= segMidGlobal)
+        ) : [];
+        
+        // Also check legacy text matching if no segment found
+        const legacyMemos = layersVisible[LayerType.THEORY_MEMOS] && activeMemosForSegment.length === 0 ? memos.filter(m => 
+             !m.segment && m.title === segText
+        ) : [];
+
+        const allActiveMemos = [...activeMemosForSegment, ...legacyMemos];
+
+        // 1. Base Content
+        let content = <>{segText}</>;
+
+        // 2. Apply Code Highlighting (Underline/Color)
         if (activeForSegment.length > 0) {
-            // To emulate "Highlighter" look, we use the primary code (last applied usually)
             const codeRef = codes.find(c => c.id === activeForSegment[0].codeId);
             const color = codeRef?.color || '#666';
 
-            // Wrap in HoverCard if code exists
             if (codeRef) {
-                segments.push(
+                content = (
                     <CodeHoverCard 
-                        key={i} 
+                        key={`code-${i}`}
                         code={codeRef} 
                         codings={allCodings}
-                        side="top" // Show tooltip above text
+                        side="top"
                     >
                          <span 
                             className="transition-colors hover:brightness-110 cursor-pointer rounded-sm px-0.5 box-decoration-clone inline-block"
                             style={{ 
-                                backgroundColor: `${color}40`, // 25% opacity
+                                backgroundColor: `${color}40`,
                                 borderBottom: `2px solid ${color}`
                             }}
                         >
@@ -603,11 +543,61 @@ const HighlightedText: React.FC<{
                         </span>
                     </CodeHoverCard>
                 );
+            }
+        } else if (allActiveMemos.length > 0) {
+             // If only memo active, still wrap span for styling
+             content = <span className="bg-amber-500/20 rounded-sm px-0.5">{segText}</span>;
+        } else {
+            content = <span key={i}>{segText}</span>;
+        }
+
+        // 3. Apply Memo Highlighting & Icon
+        // If this segment is part of a memo, wrap it or append icon at end
+        if (allActiveMemos.length > 0) {
+            // Check if this segment is the END of the memo to place the icon
+            // For simplicity, we place the icon at the end of the matching segment if it's the last segment of the memo
+            // But since we split exactly on boundaries, the last segment of a memo ends exactly at memo.end.
+            
+            // We'll append the icon to the last segment of the memo range within this paragraph
+            // Or simplistically, append it to every segment that *matches* the memo range? No, too many icons.
+            // We append the icon if `segEnd` matches any `memo.segment.end` (relative to para)
+            
+            const endingMemos = allActiveMemos.filter(m => 
+                (m.segment && Math.min(text.length, m.segment.end - paraStart) === segEnd) ||
+                (!m.segment && m.title === segText)
+            );
+
+            if (endingMemos.length > 0) {
+                const primaryMemo = endingMemos[0];
+                 segments.push(
+                    <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10")}>
+                        {content}
+                        <sup className="ml-0.5 inline-flex">
+                            <HoverCard>
+                                <HoverCardTrigger>
+                                    <StickyNote size={10} className="text-amber-500 fill-amber-500/20 cursor-help animate-in zoom-in duration-300" />
+                                </HoverCardTrigger>
+                                <HoverCardContent side="top" className="w-64 bg-amber-50 border-amber-200 text-amber-900 shadow-xl">
+                                    <div className="font-bold text-xs border-b border-amber-200 pb-1 mb-1 flex items-center gap-2">
+                                        <StickyNote size={12}/> Annotation
+                                    </div>
+                                    <div className="text-xs italic mb-2 text-amber-800/70">"{primaryMemo.segment?.text || primaryMemo.title}"</div>
+                                    <div className="text-sm font-medium leading-relaxed">{primaryMemo.content}</div>
+                                </HoverCardContent>
+                            </HoverCard>
+                        </sup>
+                    </span>
+                )
             } else {
-                 segments.push(<span key={i}>{segText}</span>);
+                // Inside a memo but not the end, just highlight
+                 segments.push(
+                    <span key={`seg-${i}`} className={cn(activeForSegment.length === 0 && "bg-amber-500/10")}>
+                        {content}
+                    </span>
+                 );
             }
         } else {
-            segments.push(<span key={i}>{segText}</span>);
+            segments.push(content);
         }
     }
 
