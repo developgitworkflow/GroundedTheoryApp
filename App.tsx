@@ -7,6 +7,7 @@ import { TheoryBuilder } from './components/TheoryBuilder';
 import { CurationWorkflow } from './components/CurationWorkflow'; 
 import { MemoDirectory } from './components/MemoDirectory'; 
 import { SettingsDialog } from './components/SettingsDialog'; // New Import
+import { Visualizations } from './components/Visualizations'; // New Import
 import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings } from './types';
 import { 
   FilePlus, 
@@ -318,6 +319,7 @@ export default function App() {
                  <TabsTrigger value="curate" className="px-6">1. Ingest & Curation</TabsTrigger>
                  <TabsTrigger value="analyze" className="px-6">2. Text Analysis</TabsTrigger>
                  <TabsTrigger value="memos" className="px-6">3. Theory Builder</TabsTrigger>
+                 <TabsTrigger value="visualize" className="px-6">4. Visual Analytics</TabsTrigger>
              </TabsList>
              
              {/* Dynamic Breadcrumb / Context Info */}
@@ -400,6 +402,17 @@ export default function App() {
                         onAddMemo={handleAddTheoryMemo}
                     />
                 </TabsContent>
+
+                 {/* 4. VISUAL ANALYTICS */}
+                <TabsContent value="visualize" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
+                    <Visualizations 
+                        codes={codes} 
+                        codings={codings} 
+                        artifacts={artifacts} 
+                        settings={projectSettings} 
+                    />
+                </TabsContent>
+
             </div>
 
             {/* Right: Sidebar (Tabs for Codes / Memos) - Only in Analysis Mode */}
