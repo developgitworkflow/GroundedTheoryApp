@@ -120,6 +120,8 @@ export default function App() {
           addJournalEntry(`Ingested and preserved artifact: ${id}`, 'auto');
       } else if (updates.status === 'disposed') {
           addJournalEntry(`Disposed artifact: ${id}`, 'auto');
+      } else if (updates.content) {
+          addJournalEntry(`Updated content for artifact: ${id}`, 'auto');
       }
   };
 
@@ -310,6 +312,7 @@ export default function App() {
                                 onAddCoding={handleAddCoding}
                                 onCreateCode={handleCreateCode}
                                 onAddMemo={handleAddMemo}
+                                onUpdateContent={(content) => handleUpdateArtifact(activeArtifact.id, { content })}
                             />
                             )}
 
