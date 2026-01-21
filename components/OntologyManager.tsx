@@ -16,7 +16,8 @@ import {
   Trash2,
   FolderOpen,
   Tag,
-  Check
+  Check,
+  Move
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -45,6 +46,14 @@ interface OntologyManagerProps {
   isElaborating: boolean;
 }
 
+// Cycle detection helper: Checks if targetId is a descendant of draggedId
+const isDescendant = (targetId: string, draggedId: string, allCodes: Code[]): boolean => {
+    if (targetId === draggedId) return true;
+    const target = allCodes.find(c => c.id === targetId);
+    if (!target || !target.parentId) return false;
+    return isDescendant(target.parentId, draggedId, allCodes);
+};
+
 export const OntologyManager: React.FC<OntologyManagerProps> = ({
   codes,
   codings,
@@ -60,23 +69,32 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'tree' | 'table'>('tree');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isRootDragOver, setIsRootDragOver] = useState(false);
   
   // -- Tree Logic --
   const rootCodes = useMemo(() => codes.filter(c => !c.parentId), [codes]);
   
-  // -- Edit State --
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
-
-  const startEditing = (code: Code) => {
-      setEditingId(code.id);
-      setEditName(code.name);
+  // Root Drop Handlers
+  const handleRootDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!isRootDragOver) setIsRootDragOver(true);
   };
 
-  const saveEdit = () => {
-      if (editingId) {
-          onUpdateCode(editingId, { name: editName });
-          setEditingId(null);
+  const handleRootDragLeave = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsRootDragOver(false);
+  };
+
+  const handleRootDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsRootDragOver(false);
+      const draggedId = e.dataTransfer.getData('text/plain');
+      if (!draggedId) return;
+
+      const code = codes.find(c => c.id === draggedId);
+      // Only update if it currently has a parent (moving to root)
+      if (code && code.parentId) {
+          onUpdateCode(draggedId, { parentId: undefined });
       }
   };
 
@@ -143,10 +161,18 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+        <div 
+            className={cn(
+                "flex-1 overflow-y-auto custom-scrollbar p-2 transition-colors", 
+                isRootDragOver && viewMode === 'tree' ? "bg-zinc-800/50 ring-2 ring-inset ring-blue-500/50" : ""
+            )}
+            onDragOver={viewMode === 'tree' ? handleRootDragOver : undefined}
+            onDragLeave={viewMode === 'tree' ? handleRootDragLeave : undefined}
+            onDrop={viewMode === 'tree' ? handleRootDrop : undefined}
+        >
             {viewMode === 'tree' ? (
-                <div className="space-y-1">
-                    {rootCodes.length === 0 && <div className="text-zinc-600 text-xs text-center py-4">No codes defined.</div>}
+                <div className="space-y-1 min-h-[300px]">
+                    {rootCodes.length === 0 && <div className="text-zinc-600 text-xs text-center py-4">No codes defined. Drop here to create root items.</div>}
                     {rootCodes.map(code => (
                         <TreeItem 
                             key={code.id}
@@ -212,11 +238,51 @@ const TreeItem: React.FC<TreeItemProps> = ({
 }) => {
     const children = allCodes.filter(c => c.parentId === code.id);
     const [isOpen, setIsOpen] = useState(true);
+    const [isDragOver, setIsDragOver] = useState(false);
+    
     const usageCount = codings.filter(c => c.codeId === code.id).length;
     const isCategory = code.kind === 'category';
 
     const matches = code.name.toLowerCase().includes(searchTerm.toLowerCase());
     const hasMatchingChildren = children.some(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    // --- DnD Handlers ---
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.setData('text/plain', code.id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.stopPropagation();
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        if (!isCategory) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDragOver) setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        if (!isCategory) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (draggedId === code.id) return;
+
+        // Check for cycles
+        if (isDescendant(code.id, draggedId, allCodes)) {
+            alert("Cannot move a category into its own descendant.");
+            return;
+        }
+
+        onUpdateCode(draggedId, { parentId: code.id });
+    };
 
     if (searchTerm && !matches && !hasMatchingChildren) return null;
 
@@ -224,11 +290,17 @@ const TreeItem: React.FC<TreeItemProps> = ({
         <div className="select-none text-sm">
              <div 
                 className={cn(
-                    "group flex items-center gap-2 py-1 px-2 rounded-md hover:bg-zinc-800/80 cursor-pointer transition-colors border border-transparent",
-                    selectedCodeId === code.id && "bg-blue-900/20 border-blue-900/50"
+                    "group flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-all border border-transparent",
+                    selectedCodeId === code.id ? "bg-blue-900/20 border-blue-900/50" : "hover:bg-zinc-800/80",
+                    isDragOver ? "bg-zinc-800 ring-2 ring-blue-500/50 z-10 relative" : ""
                 )}
                 style={{ marginLeft: `${depth * 12}px` }}
                 onClick={() => onNodeClick(code.id)}
+                draggable
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
             >
                 <div 
                     onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
@@ -246,6 +318,9 @@ const TreeItem: React.FC<TreeItemProps> = ({
                 <span className="text-[10px] text-zinc-600 font-mono w-6 text-right">
                     {usageCount}
                 </span>
+                
+                {/* Drag Handle Indicator (Visual cue) */}
+                <Move size={10} className="text-zinc-700 opacity-0 group-hover:opacity-100 cursor-grab" />
 
                 {/* Context Menu Trigger (Visible on Hover) */}
                 <DropdownMenu>
