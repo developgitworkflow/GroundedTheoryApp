@@ -7,7 +7,9 @@ export interface GraphNode {
   group: number;
   val: number;
   isCore: boolean;
-  // D3 properties that might be added later by the simulation
+  kind: 'code' | 'category';
+  parentId?: string;
+  // D3 properties
   x?: number;
   y?: number;
   fx?: number | null;
@@ -15,81 +17,90 @@ export interface GraphNode {
 }
 
 export interface GraphLink {
-  source: string; // Initially string ID
-  target: string; // Initially string ID
+  source: string;
+  target: string;
   value: number;
+  type: 'hierarchy' | 'association' | 'theoretical';
 }
 
 /**
- * Transforms Codes and Codings into a Node/Link graph structure based on co-occurrence.
+ * Transforms Codes and Codings into a Node/Link graph structure.
  * 
  * Logic:
- * 1. Codes become Nodes. Size (val) is determined by frequency of coding.
- * 2. Links are created between Codes if they appear in the same Artifact.
- * 3. Link strength (value) increases with multiple co-occurrences.
- * 4. If a Core Category exists, ensure it has connections (logic can be extended here).
+ * 1. Nodes: Created for every Code and Category.
+ * 2. Hierarchy Links: Created between Codes and their Parent Category (Strong structural bond).
+ * 3. Association Links: Created between Codes that appear in the same Artifact (Data-driven bond).
  */
 export const buildTheoryGraph = (codes: Code[], codings: Coding[]): { nodes: GraphNode[], links: GraphLink[] } => {
   // 1. Prepare Nodes
   const nodes: GraphNode[] = codes.map(c => ({
     id: c.id,
     name: c.name,
-    color: c.isCore ? '#f59e0b' : c.color, // Gold for core
-    group: 1,
-    val: codings.filter(coding => coding.codeId === c.id).length + 1,
-    isCore: !!c.isCore
+    color: c.isCore ? '#f59e0b' : c.color,
+    group: c.kind === 'category' ? 2 : 1,
+    // Base size: Categories are larger. Core is largest. Usage adds weight.
+    val: (c.kind === 'category' ? 10 : 2) + codings.filter(coding => coding.codeId === c.id).length,
+    isCore: !!c.isCore,
+    kind: c.kind,
+    parentId: c.parentId
   }));
 
-  // 2. Prepare Links
   const links: GraphLink[] = [];
-  
-  // Group codes by artifact to find co-occurrences
+  const linkMap = new Set<string>(); // To prevent duplicates
+
+  const addLink = (source: string, target: string, type: GraphLink['type'], weight = 1) => {
+      // Ensure canonical ordering for ID key to prevent A->B and B->A dupes
+      const key = [source, target].sort().join('-');
+      if (source === target) return;
+
+      const existingIndex = links.findIndex(l => 
+          (l.source === source && l.target === target) || 
+          (l.source === target && l.target === source)
+      );
+
+      if (existingIndex >= 0) {
+          // If a hierarchy link already exists, don't overwrite it with association, 
+          // but if it's association, increase weight.
+          if (links[existingIndex].type === 'association' && type === 'association') {
+              links[existingIndex].value += weight;
+          }
+      } else {
+          links.push({ source, target, value: weight, type });
+      }
+  };
+
+  // 2. Hierarchy Links (Explicit Ontology)
+  // Connect Child Code -> Parent Category
+  codes.forEach(c => {
+      if (c.parentId) {
+          addLink(c.id, c.parentId, 'hierarchy', 5); // Stronger weight for hierarchy
+      }
+  });
+
+  // 3. Association Links (Co-occurrence in Data)
   const artifactGroups: Record<string, string[]> = {};
   codings.forEach(c => {
     if (!artifactGroups[c.artifactId]) artifactGroups[c.artifactId] = [];
-    // Only add unique codes per artifact for the "co-occurrence" check in this specific pass
-    // (Or allow multiples if we want to weight based on frequency within the same doc)
     if (!artifactGroups[c.artifactId].includes(c.codeId)) artifactGroups[c.artifactId].push(c.codeId);
   });
 
-  // Generate links for every pair in the same artifact
   Object.values(artifactGroups).forEach(groupCodes => {
     for (let i = 0; i < groupCodes.length; i++) {
       for (let j = i + 1; j < groupCodes.length; j++) {
-         const source = groupCodes[i];
-         const target = groupCodes[j];
-
-         // Check if link exists
-         const existing = links.find(l => 
-           (l.source === source && l.target === target) || 
-           (l.source === target && l.target === source)
-         );
-
-         if (existing) {
-           existing.value++;
-         } else {
-           links.push({ source, target, value: 1 });
-         }
+         addLink(groupCodes[i], groupCodes[j], 'association', 1);
       }
     }
   });
   
-  // 3. Core Category Handling
-  // Ensure the Core Category is connected to isolated nodes (Theoretical Sampling heuristic)
+  // 4. Core Category Theoretical Links
+  // Ensure the Core Category acts as a gravity well
   const coreNode = nodes.find(n => n.isCore);
   if (coreNode) {
       nodes.forEach(n => {
-          if (n.id !== coreNode.id) {
-              const hasLink = links.some(l => 
-                  (l.source === n.id && l.target === coreNode.id) || 
-                  (l.target === n.id && l.source === coreNode.id)
-              );
-              
-              // If node is isolated from Core, create a weak "theoretical" link
-              // This represents the researcher's need to relate everything to the core
-              if (!hasLink) {
-                   links.push({ source: n.id, target: coreNode.id, value: 0.5 });
-              }
+          if (n.id !== coreNode.id && n.kind === 'category') {
+              // Create a 'theoretical' link to other categories if no direct hierarchy exists
+              // This visualizes the core category pulling other concepts together
+              addLink(n.id, coreNode.id, 'theoretical', 0.5);
           }
       });
   }

@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { Code, Coding, LayerType } from '../types';
 import { buildTheoryGraph, GraphNode, GraphLink } from '../lib/graphUtils';
+import { ZoomIn, ZoomOut, Maximize, RefreshCw, Layers } from 'lucide-react';
+import { Button } from './ui/button';
 
 interface TheoryGraphProps {
   codes: Code[];
@@ -11,18 +13,20 @@ interface TheoryGraphProps {
   selectedCodeId?: string | null;
 }
 
-// Extend D3 types using our domain types
+// D3 Types
 interface D3Node extends GraphNode, d3.SimulationNodeDatum {}
 interface D3Link extends d3.SimulationLinkDatum<D3Node> {
-  source: string | D3Node;
-  target: string | D3Node;
+  type: GraphLink['type'];
   value: number;
 }
 
 export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layersVisible, onNodeClick, selectedCodeId }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   // Handle Resize
   useEffect(() => {
@@ -39,99 +43,165 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
-    if (!svgRef.current || !layersVisible[LayerType.AXIAL_CONNECTIONS]) {
-      if(svgRef.current && !layersVisible[LayerType.AXIAL_CONNECTIONS]) {
-         d3.select(svgRef.current).selectAll("*").remove();
+  const handleZoomIn = () => {
+      if (svgRef.current && zoomRef.current) {
+          d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 1.2);
       }
-      return;
-    }
+  };
 
-    // 1. Build Domain Graph
-    // We clone the result to ensure D3 mutation doesn't affect source data if passing props down significantly changed
+  const handleZoomOut = () => {
+      if (svgRef.current && zoomRef.current) {
+          d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 0.8);
+      }
+  };
+
+  const handleResetZoom = () => {
+      if (svgRef.current && zoomRef.current) {
+          d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+      }
+  };
+
+  useEffect(() => {
+    if (!svgRef.current || !layersVisible[LayerType.AXIAL_CONNECTIONS]) return;
+
+    const { width, height } = dimensions;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove(); // Clear canvas
+
+    // 1. Data Prep
     const graphData = buildTheoryGraph(codes, codings);
-    
-    // Cast to D3 types for simulation
     const nodes: D3Node[] = graphData.nodes.map(n => ({ ...n })); 
     const links: D3Link[] = graphData.links.map(l => ({ ...l }));
 
-    // 2. Clear previous
-    const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    // 2. Zoom Setup
+    const container = svg.append("g");
+    
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 4])
+        .on("zoom", (event) => {
+            container.attr("transform", event.transform);
+            setZoomLevel(event.transform.k);
+        });
+    
+    zoomRef.current = zoom;
+    svg.call(zoom).on("dblclick.zoom", null); // Disable double click zoom
 
-    const { width, height } = dimensions;
-
-    // 3. Simulation
+    // 3. Simulation Setup
     const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id((d: any) => d.id).distance((d) => {
-         return 120; 
+      .force("link", d3.forceLink(links)
+          .id((d: any) => d.id)
+          .distance((d: any) => {
+              if (d.type === 'hierarchy') return 80; // Tighter cluster for category->child
+              if (d.type === 'theoretical') return 200; // Longer links for core connections
+              return 150; // Loose for associations
+          })
+          .strength((d: any) => {
+              if (d.type === 'hierarchy') return 0.8;
+              if (d.type === 'theoretical') return 0.1;
+              return 0.2;
+          })
+      )
+      .force("charge", d3.forceManyBody().strength((d: any) => {
+          if (d.isCore) return -800;
+          if (d.kind === 'category') return -400;
+          return -100;
       }))
-      .force("charge", d3.forceManyBody().strength(-400))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collide", d3.forceCollide().radius((d: any) => (d.val * 6) + 15));
+      .force("collide", d3.forceCollide().radius((d: any) => {
+          if (d.isCore) return 60;
+          if (d.kind === 'category') return 30;
+          return 10;
+      }).strength(0.7))
+      .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05));
 
-    // 4. Draw
-    const link = svg.append("g")
-      .attr("stroke", "#4b5563")
-      .attr("stroke-opacity", 0.4)
+    // 4. Rendering Elements
+
+    // Define Arrow markers
+    svg.append("defs").selectAll("marker")
+        .data(["end"])
+        .enter().append("marker")
+        .attr("id", String)
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 25)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#555");
+
+    // Links
+    const link = container.append("g")
       .selectAll("line")
       .data(links)
       .join("line")
-      .attr("stroke-width", (d) => Math.sqrt(d.value));
+      .attr("stroke", (d) => d.type === 'hierarchy' ? "#60a5fa" : "#4b5563") // Blue for structure, gray for association
+      .attr("stroke-opacity", (d) => d.type === 'hierarchy' ? 0.6 : 0.3)
+      .attr("stroke-width", (d) => d.type === 'hierarchy' ? 2 : Math.sqrt(d.value))
+      .attr("stroke-dasharray", (d) => d.type === 'association' ? "3 3" : "0");
 
-    const nodeGroup = svg.append("g")
-      .selectAll("g")
+    // Nodes (Groups)
+    const node = container.append("g")
+      .selectAll(".node")
       .data(nodes)
       .join("g")
+      .attr("class", "node")
       .call(d3.drag<any, any>()
           .on("start", dragstarted)
           .on("drag", dragged)
           .on("end", dragended));
 
-    // Node Circles
-    nodeGroup.append("circle")
-      .attr("r", (d) => d.isCore ? 30 : 5 + Math.sqrt(d.val) * 4)
-      .attr("fill", (d) => d.color)
-      .attr("stroke", (d) => {
-          if (selectedCodeId === d.id) return "#60a5fa"; // Selected Highlight
-          return d.isCore ? "#fff" : "#fff";
-      })
-      .attr("stroke-width", (d) => {
-          if (selectedCodeId === d.id) return 4;
-          return d.isCore ? 3 : 1.5;
-      })
-      .attr("stroke-dasharray", (d) => d.isCore ? "3 2" : "0")
-      .attr("cursor", "pointer")
-      .attr("filter", (d) => d.isCore ? "drop-shadow(0 0 8px rgba(253, 224, 71, 0.5))" : "")
-      .on("click", (event, d) => onNodeClick(d.id));
+    // -- Visual Layer 1: Core Halo --
+    node.filter(d => d.isCore)
+        .append("circle")
+        .attr("r", 40)
+        .attr("fill", "url(#goldGradient)") // Simple fill for now
+        .attr("fill-opacity", 0.2)
+        .attr("stroke", "#fbbf24")
+        .attr("stroke-width", 1)
+        .attr("stroke-dasharray", "4 2")
+        .attr("class", "animate-pulse-slow");
 
-    // Core Label Halo (if core)
-    nodeGroup.filter(d => d.isCore)
-        .append("text")
-        .text("CORE")
-        .attr("dy", -35)
-        .attr("text-anchor", "middle")
-        .attr("fill", "#fbbf24")
-        .attr("font-size", "10px")
-        .attr("font-weight", "bold")
-        .attr("letter-spacing", "2px");
+    // -- Visual Layer 2: Categories (The "Hubs") --
+    node.filter(d => d.kind === 'category')
+        .append("circle")
+        .attr("r", d => d.isCore ? 25 : 15) // Larger radius
+        .attr("fill", "#18181b") // Dark center
+        .attr("stroke", d => d.color)
+        .attr("stroke-width", d => selectedCodeId === d.id ? 4 : 3);
 
-    // Labels
-    nodeGroup.append("text")
-      .text((d) => d.name)
-      .attr("x", (d) => d.isCore ? 0 : 12)
-      .attr("y", (d) => d.isCore ? 5 : 4)
-      .attr("text-anchor", (d) => d.isCore ? "middle" : "start")
-      .attr("fill", (d) => {
-          if (selectedCodeId === d.id) return "#60a5fa";
-          return d.isCore ? "#000" : "#e5e7eb";
-      })
-      .attr("font-size", (d) => d.isCore ? "10px" : "12px")
-      .attr("font-weight", (d) => d.isCore ? "bold" : "normal")
-      .attr("font-family", "sans-serif")
+    // -- Visual Layer 3: Codes (The "Leaves") --
+    node.filter(d => d.kind === 'code')
+        .append("circle")
+        .attr("r", d => 4 + Math.sqrt(d.val))
+        .attr("fill", d => d.color)
+        .attr("stroke", "#18181b")
+        .attr("stroke-width", 1.5)
+        .attr("opacity", 0.9);
+
+    // Interaction Circle (Invisible hit target larger than visual)
+    node.append("circle")
+        .attr("r", d => d.kind === 'category' ? 30 : 15)
+        .attr("fill", "transparent")
+        .attr("cursor", "pointer")
+        .on("click", (e, d) => {
+            e.stopPropagation();
+            onNodeClick(d.id);
+        });
+
+    // Labels (Semantic Zoom Logic handled in Tick or CSS)
+    const labels = node.append("text")
+      .text(d => d.name)
+      .attr("x", d => d.kind === 'category' ? 0 : 10)
+      .attr("y", d => d.kind === 'category' ? 30 : 4)
+      .attr("text-anchor", d => d.kind === 'category' ? "middle" : "start")
+      .attr("fill", d => selectedCodeId === d.id ? "#60a5fa" : (d.kind === 'category' ? "#e4e4e7" : "#a1a1aa"))
+      .attr("font-size", d => d.kind === 'category' ? "12px" : "10px")
+      .attr("font-weight", d => d.kind === 'category' ? "bold" : "normal")
       .style("pointer-events", "none")
-      .style("text-shadow", (d) => d.isCore ? "none" : "1px 1px 2px #000");
+      .style("text-shadow", "0 1px 4px black");
 
+    // Simulation Tick
     simulation.on("tick", () => {
       link
         .attr("x1", (d: any) => d.source.x)
@@ -139,7 +209,14 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
         .attr("x2", (d: any) => d.target.x)
         .attr("y2", (d: any) => d.target.y);
 
-      nodeGroup.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      
+      // Semantic Zoom: Hide small labels when zoomed out
+      labels.style("opacity", (d) => {
+          if (d.isCore || d.kind === 'category') return 1;
+          // Hide code labels if zoom < 0.8
+          return zoomLevel < 0.8 ? 0 : 1; 
+      });
     });
 
     function dragstarted(event: any) {
@@ -162,31 +239,63 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     return () => {
       simulation.stop();
     };
-  }, [codes, codings, layersVisible, dimensions, selectedCodeId]);
+  }, [codes, codings, layersVisible, dimensions, selectedCodeId, zoomLevel]);
 
   if (!layersVisible[LayerType.AXIAL_CONNECTIONS]) return null;
 
   return (
     <div 
       ref={wrapperRef} 
-      className="absolute inset-0 pointer-events-none z-10 overflow-hidden" 
-      style={{ pointerEvents: 'none' }} 
+      className="absolute inset-0 z-10 overflow-hidden bg-gradient-to-b from-transparent to-zinc-950/20" 
     >
       <svg 
         ref={svgRef} 
         width={dimensions.width} 
         height={dimensions.height} 
-        className="pointer-events-auto"
-        style={{ background: 'transparent' }}
+        className="cursor-move"
       />
-      <div className="absolute bottom-4 right-4 bg-black/60 p-2 rounded text-xs text-gray-400 backdrop-blur-sm pointer-events-none border border-zinc-800">
-        <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full bg-yellow-500"></div> 
-            <span>Core Category</span>
+      
+      {/* Controls Overlay */}
+      <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-zinc-800/50 shadow-xl">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleZoomIn} title="Zoom In">
+              <ZoomIn size={16} />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleZoomOut} title="Zoom Out">
+              <ZoomOut size={16} />
+          </Button>
+          <div className="h-px bg-zinc-700 mx-2" />
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleResetZoom} title="Reset View">
+              <Maximize size={16} />
+          </Button>
+      </div>
+
+      {/* Legend Overlay */}
+      <div className="absolute top-4 right-4 bg-black/60 p-3 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-zinc-800 pointer-events-none select-none">
+        <div className="font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+            <Layers size={12}/> Network Layers
         </div>
-        <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-blue-500"></div> 
-            <span>Open Codes</span>
+        <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full border-2 border-[#fbbf24] bg-transparent"></div> 
+                <span>Core Category</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full border-2 border-zinc-500 bg-zinc-900"></div> 
+                <span>Category (Hub)</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div> 
+                <span>Open Code</span>
+            </div>
+            <div className="w-full h-px bg-zinc-700 my-1"></div>
+            <div className="flex items-center gap-2">
+                <div className="w-6 h-0.5 bg-blue-400 opacity-60"></div> 
+                <span className="text-blue-200">Hierarchy</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-6 h-0.5 border-t border-dashed border-gray-500"></div> 
+                <span className="text-zinc-500">Association</span>
+            </div>
         </div>
       </div>
     </div>

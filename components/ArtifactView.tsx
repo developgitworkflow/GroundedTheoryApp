@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info, ChevronRight, Edit2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
-import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
 import { Badge } from './ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut } from './ui/command';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
@@ -32,6 +32,13 @@ interface ArtifactViewProps {
   onClearSelection?: () => void;
   onUpdateArtifact?: (id: string, updates: Partial<Artifact>) => void;
   participants?: Participant[];
+}
+
+// Hover State Interface (Codes only for Lens)
+interface HoverState {
+    type: 'code';
+    data: Code;
+    relatedData?: any; 
 }
 
 export const ArtifactView: React.FC<ArtifactViewProps> = ({ 
@@ -62,6 +69,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
   
+  // Centralized Hover State (Codes Only)
+  const [activeHover, setActiveHover] = useState<HoverState | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const memoRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -74,9 +84,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
   // --- Data Preparation ---
 
-  // Filter codings for this artifact
   const activeCodings = useMemo(() => {
-    // If no coding layer is visible, return nothing
     if (!layersVisible[LayerType.OPEN_CODING] && !layersVisible[LayerType.CATEGORIES]) return [];
 
     let relevant = codings.filter(c => c.artifactId === artifact.id);
@@ -88,14 +96,12 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     return relevant;
   }, [codings, artifact.id, layersVisible, selectedCodeId]);
 
-  // Split content into paragraphs for the "Document Browser" view
   const paragraphs = useMemo(() => {
     let currentIndex = 0;
     return artifact.content.split('\n').map((text, index) => {
         const start = currentIndex;
-        // split removes the \n, so length is just text.length
         const end = start + text.length;
-        currentIndex = end + 1; // +1 for the newline
+        currentIndex = end + 1; 
         return { 
             id: index + 1,
             text, 
@@ -105,10 +111,28 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     });
   }, [artifact.content]);
 
-  // Focus input on selection
-  useEffect(() => {
-      // Logic handled by CommandInput autoFocus
-  }, [selection, showMemoInput]);
+  // --- Hover Logic ---
+  const handleCodeHover = (code: Code) => {
+      const childIds = codes.filter(c => c.parentId === code.id).map(c => c.id);
+      const relevantCodings = codings.filter(c => c.codeId === code.id || childIds.includes(c.codeId));
+      const usageCount = relevantCodings.length;
+      const contributorIds = Array.from(new Set(relevantCodings.map(c => c.researcherId).filter(Boolean)));
+      const contributors = researchTeam 
+        ? researchTeam.researchers.filter(r => contributorIds.includes(r.id))
+        : [];
+      
+      const parentCode = codes.find(c => c.id === code.parentId);
+
+      setActiveHover({
+          type: 'code',
+          data: code,
+          relatedData: { usageCount, contributors, parentCode }
+      });
+  };
+
+  const clearHover = () => {
+      setActiveHover(null);
+  };
 
   // --- Selection Logic ---
 
@@ -122,11 +146,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     const text = sel.toString().trim();
     if (!text) return;
     
-    // Attempt to find paragraph index from parent node
     let currentNode: Node | null = range.startContainer;
     let paraIndexAttr: string | null = null;
     
-    // Traverse up to find the data-para-index
     while (currentNode && currentNode !== containerRef.current) {
         if (currentNode instanceof HTMLElement && currentNode.dataset.paraIndex) {
             paraIndexAttr = currentNode.dataset.paraIndex;
@@ -139,8 +161,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         const pIdx = parseInt(paraIndexAttr);
         const para = paragraphs[pIdx];
         
-        // Use the native string search within the paragraph text which is safer contextually
-        const startInPara = para.text.indexOf(text); // Naive
+        const startInPara = para.text.indexOf(text); 
         if (startInPara !== -1) {
             const absStart = para.start + startInPara;
             const absEnd = absStart + text.length;
@@ -178,7 +199,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     let codeId = existingCodeId;
 
     if (!codeId) {
-        // Double check if it exists by name case-insensitive
         const existing = codes.find(c => c.name.toLowerCase() === codeName.toLowerCase());
         if (existing) {
             codeId = existing.id;
@@ -238,6 +258,55 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             />
         )}
 
+        {/* --- INSPECTOR LENS (Centralized Hover HUD - CODES ONLY) --- */}
+        <div className={cn(
+            "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 ease-out transform",
+            activeHover ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 scale-95"
+        )}>
+            {activeHover && activeHover.type === 'code' && (
+                <div className="bg-zinc-950/90 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl p-0 w-[500px] overflow-hidden flex flex-col pointer-events-auto ring-1 ring-white/10">
+                    <div className="h-1 w-full" style={{ backgroundColor: activeHover.data.color }} />
+                    <div className="p-4 flex gap-4">
+                        <div className="shrink-0 flex flex-col items-center gap-2">
+                            <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 bg-zinc-900/50 shadow-inner">
+                                {activeHover.data.kind === 'category' ? 
+                                    <FolderTree size={24} style={{ color: activeHover.data.color }} /> : 
+                                    <Tag size={24} style={{ color: activeHover.data.color }} />
+                                }
+                            </div>
+                            {activeHover.data.isCore && <Badge className="text-[9px] h-4 bg-yellow-500/20 text-yellow-500 border-yellow-500/30">CORE</Badge>}
+                        </div>
+                        <div className="flex-1 space-y-1">
+                            {activeHover.relatedData.parentCode && (
+                                <div className="flex items-center gap-1 text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                                    <FolderTree size={10} /> 
+                                    {activeHover.relatedData.parentCode.name}
+                                    <ChevronRight size={10} />
+                                </div>
+                            )}
+                            <h3 className="font-bold text-lg text-zinc-100 leading-none">{activeHover.data.name}</h3>
+                            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                {activeHover.data.description || "No definition provided."}
+                            </p>
+                        </div>
+                        <div className="shrink-0 flex flex-col items-end justify-between border-l border-zinc-800 pl-4 py-1">
+                            <div className="text-center">
+                                <div className="text-xl font-mono font-bold text-zinc-200">{activeHover.relatedData.usageCount}</div>
+                                <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Refs</div>
+                            </div>
+                            <div className="flex -space-x-1.5 mt-2">
+                                {activeHover.relatedData.contributors.length > 0 ? activeHover.relatedData.contributors.map((r: Researcher) => (
+                                    <Avatar key={r.id} className="h-5 w-5 border border-zinc-900 ring-1 ring-zinc-800">
+                                        <AvatarFallback style={{ backgroundColor: r.color, color: 'white', fontSize: '8px' }}>{r.initials}</AvatarFallback>
+                                    </Avatar>
+                                )) : <span className="text-[10px] text-zinc-600">-</span>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+
         {/* Helper Toolbar (Floating) for New Selection */}
         {selection && (
             <div 
@@ -285,7 +354,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                         </div>
                      )}
 
-                     {/* Coding Interface via Command Component */}
+                     {/* Coding Interface */}
                      {!showMemoInput && (
                          <Command className="border-none bg-transparent">
                              <CommandInput placeholder="Search codebook..." autoFocus />
@@ -294,7 +363,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                      No matching codes found. Use Create.
                                  </CommandEmpty>
                                  
-                                 {/* AI Suggestions Group */}
                                  {suggestedCodesList.length > 0 && (
                                      <CommandGroup heading="AI Suggestions">
                                          {suggestedCodesList.map(c => (
@@ -306,7 +374,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                      </CommandGroup>
                                  )}
 
-                                 {/* Codebook Group */}
                                  <CommandGroup heading="Existing Codes">
                                      {codes.map(code => (
                                          <CommandItem key={code.id} value={code.name} onSelect={() => applyCode(code.name, code.id)}>
@@ -317,10 +384,8 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                      ))}
                                  </CommandGroup>
 
-                                 {/* Actions Group - Always visible but typically fallback */}
                                  <CommandGroup heading="Actions">
                                      <CommandItem onSelect={() => {
-                                         // Fallback creation for current search
                                          const name = prompt("Name for new code:");
                                          if(name) applyCode(name);
                                      }}>
@@ -400,12 +465,10 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                 {/* Content Area */}
                 <div className="max-w-5xl mx-auto mt-6 bg-[#252526] shadow-2xl border border-zinc-800 min-h-[800px]">
                     {paragraphs.map((para, index) => {
-                        // Find codings relevant to this paragraph
                         const paraCodings = activeCodings.filter(c => 
                             c.start < para.end && c.end > para.start
                         );
                         
-                        // Find memos relevant to this paragraph
                         const paraMemos = memos.filter(m => 
                            m.relatedIds.includes(artifact.id) && (
                                (m.segment && m.segment.start < para.end && m.segment.end > para.start) ||
@@ -413,8 +476,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                            )
                         );
 
-                        // Determine distinct visual elements for stripes
-                        // We need to decide whether to show individual codes OR aggregated categories
                         const stripesToRender: { code: Code, isCategoryAgg: boolean }[] = [];
 
                         if (layersVisible[LayerType.OPEN_CODING]) {
@@ -425,12 +486,11 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                         }
 
                         if (layersVisible[LayerType.CATEGORIES]) {
-                            // Find parent categories for codings
                             const parents = new Set<string>();
                             paraCodings.forEach(c => {
                                 const code = codes.find(x => x.id === c.codeId);
                                 if (code && code.parentId) parents.add(code.parentId);
-                                if (code && code.kind === 'category') parents.add(code.id); // If mapped directly to category
+                                if (code && code.kind === 'category') parents.add(code.id);
                             });
 
                             parents.forEach(pid => {
@@ -439,7 +499,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             });
                         }
 
-                        // Deduplicate stripes (if code is category and logic overlaps)
                         const uniqueStripes = stripesToRender.filter((v,i,a) => a.findIndex(t => t.code.id === v.code.id) === i);
 
                         return (
@@ -448,27 +507,40 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                 className="group flex hover:bg-black/5"
                                 data-para-index={index}
                             >
-                                {/* 1. Gutter: Line Number & Memos */}
+                                {/* 1. Gutter: Line Number & Memos (WITH HOVER CARD RESTORED) */}
                                 <div className="w-12 flex-shrink-0 bg-[#1e1e1e] border-r border-zinc-800 flex flex-col items-center pt-2 gap-2 select-none">
                                     <span className="text-[10px] text-zinc-600 font-mono">{para.id}</span>
                                     {paraMemos.length > 0 && layersVisible[LayerType.THEORY_MEMOS] && (
                                         <div className="relative group/memo">
-                                            <button 
-                                                onClick={() => handleEditMemoClick(paraMemos[0])}
-                                                className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center"
-                                                title="Click to edit memo"
-                                                ref={el => { memoRefs.current[paraMemos[0].id] = el }}
-                                            >
-                                                <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500")}/>
-                                                <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
-                                            </button>
-                                            
-                                            {/* Hover Preview Tooltip */}
-                                            <div className="absolute left-6 top-0 w-48 bg-amber-100 text-zinc-900 p-2 rounded shadow-xl text-xs z-30 opacity-0 group-hover/memo:opacity-100 pointer-events-none transition-opacity">
-                                                <div className="font-bold mb-1 border-b border-amber-200 pb-1">#{paraMemos[0].number} {paraMemos[0].title}</div>
-                                                <div className="line-clamp-3 opacity-75">{paraMemos[0].content}</div>
-                                                <div className="mt-1 text-[9px] text-amber-800 font-bold uppercase tracking-wide">Click icon to edit</div>
-                                            </div>
+                                            <HoverCard openDelay={100} closeDelay={100}>
+                                                <HoverCardTrigger asChild>
+                                                    <button 
+                                                        onClick={() => handleEditMemoClick(paraMemos[0])}
+                                                        className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center"
+                                                        ref={el => { memoRefs.current[paraMemos[0].id] = el }}
+                                                    >
+                                                        <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500")}/>
+                                                        <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
+                                                    </button>
+                                                </HoverCardTrigger>
+                                                <HoverCardContent side="right" align="start" className="w-64 z-50 bg-zinc-950 border-zinc-800 p-0 overflow-hidden">
+                                                    <div className="h-1 bg-amber-500 w-full" />
+                                                    <div className="p-3 space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="font-bold text-xs text-zinc-300">Annotation #{paraMemos[0].number}</span>
+                                                            <span className="text-[10px] text-zinc-500">{new Date(paraMemos[0].createdAt).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <p className="text-xs text-zinc-400 italic bg-zinc-900/50 p-2 rounded border border-zinc-800/50">
+                                                            {paraMemos[0].content}
+                                                        </p>
+                                                        <div className="flex justify-end pt-1">
+                                                            <Button size="xs" variant="ghost" onClick={() => handleEditMemoClick(paraMemos[0])} className="h-6 text-[10px] gap-1 hover:text-white">
+                                                                <Edit2 size={10} /> Edit
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </HoverCardContent>
+                                            </HoverCard>
                                         </div>
                                     )}
                                 </div>
@@ -476,25 +548,19 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                 {/* 2. Coding Stripes Margin */}
                                 <div className="w-6 border-r border-zinc-800 bg-[#2d2d2d] flex flex-row relative select-none">
                                     {uniqueStripes.map(({ code, isCategoryAgg }) => (
-                                        <CodeHoverCard 
+                                        <div 
                                             key={code.id}
-                                            code={code}
-                                            codes={codes}
-                                            codings={codings}
-                                            researchTeam={researchTeam}
-                                        >
-                                            <div 
-                                                className={cn(
-                                                    "flex-1 h-full hover:brightness-125 transition-all cursor-help relative",
-                                                    isCategoryAgg ? "w-3" : "w-1"
-                                                )}
-                                                style={{ 
-                                                    backgroundColor: code.color,
-                                                    opacity: isCategoryAgg ? 0.8 : 1
-                                                }}
-                                                title={isCategoryAgg ? `Category: ${code.name}` : code.name}
-                                            />
-                                        </CodeHoverCard>
+                                            className={cn(
+                                                "flex-1 h-full hover:brightness-125 transition-all cursor-help relative",
+                                                isCategoryAgg ? "w-3" : "w-1"
+                                            )}
+                                            style={{ 
+                                                backgroundColor: code.color,
+                                                opacity: isCategoryAgg ? 0.8 : 1
+                                            }}
+                                            onMouseEnter={() => handleCodeHover(code)}
+                                            onMouseLeave={clearHover}
+                                        />
                                     ))}
                                 </div>
 
@@ -509,6 +575,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         memos={paraMemos}
                                         researchTeam={researchTeam}
                                         layersVisible={layersVisible}
+                                        onHoverCode={handleCodeHover}
+                                        onEditMemo={handleEditMemoClick}
+                                        onLeaveHover={clearHover}
                                     />
                                 </div>
                             </div>
@@ -526,110 +595,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   );
 };
 
-// --- Reusable Code Hover Card Content ---
-
-const CodeHoverCard: React.FC<{
-    code: Code;
-    codes: Code[];
-    codings: Coding[];
-    researchTeam?: ResearchTeam;
-    children: React.ReactNode;
-    align?: "start" | "center" | "end";
-    side?: "top" | "right" | "bottom" | "left";
-}> = ({ code, codes, codings, researchTeam, children, align = "center", side = "right" }) => {
-    
-    // Filter codings for this specific code to identify researchers
-    // If it's a category, we might want to sum children, but for simplicity we assume direct mapping + immediate children in usage stats
-    const childIds = codes.filter(c => c.parentId === code.id).map(c => c.id);
-    const relevantCodings = codings.filter(c => c.codeId === code.id || childIds.includes(c.codeId));
-    const usageCount = relevantCodings.length;
-    
-    // Find unique researchers who used this code
-    const contributorIds = Array.from(new Set(relevantCodings.map(c => c.researcherId).filter(Boolean)));
-    const contributors = researchTeam 
-        ? researchTeam.researchers.filter(r => contributorIds.includes(r.id))
-        : [];
-    
-    // Calculate Hierarchy (Simple 2-level for now)
-    const parentCode = codes.find(c => c.id === code.parentId);
-    
-    return (
-        <HoverCard openDelay={200} closeDelay={150}>
-            <HoverCardTrigger asChild>
-                {children}
-            </HoverCardTrigger>
-            <HoverCardContent side={side} align={align} className="w-96 p-0 border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden">
-                {/* Header with Hierarchy */}
-                <div className="bg-zinc-900 border-b border-zinc-800 p-3">
-                     <div className="flex items-center gap-2 text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">
-                         <FolderTree size={10} />
-                         <span>Ontology Path</span>
-                     </div>
-                     <div className="flex items-center gap-2 text-sm text-zinc-300">
-                         {parentCode ? (
-                             <>
-                                <span className="text-zinc-500">{parentCode.name}</span>
-                                <ArrowRight size={12} className="text-zinc-600"/>
-                             </>
-                         ) : (
-                             <span className="text-zinc-500 italic">Root</span>
-                             
-                         )}
-                         {parentCode && <ArrowRight size={12} className="text-zinc-600 hidden"/>}
-                         <span className="font-semibold text-white">{code.name}</span>
-                     </div>
-                </div>
-
-                <div className="p-4 space-y-4">
-                    <div className="flex items-start gap-4">
-                         <div className="shrink-0">
-                             <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 shadow-inner" style={{ backgroundColor: `${code.color}20` }}>
-                                {code.kind === 'category' ? <FolderTree size={24} style={{ color: code.color }} /> : <Tag size={24} style={{ color: code.color }} />}
-                             </div>
-                         </div>
-                         <div className="space-y-1">
-                             <div className="flex items-center gap-2">
-                                <h4 className="text-lg font-bold text-zinc-100">{code.name}</h4>
-                                {code.isCore && <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30 text-[10px] h-5 px-1.5">CORE CATEGORY</Badge>}
-                                {code.kind === 'category' && <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-zinc-700 text-zinc-500">CATEGORY</Badge>}
-                             </div>
-                             <p className="text-xs text-zinc-400 leading-relaxed">
-                                 {code.description || "Open coding category. No specific definition provided."}
-                             </p>
-                         </div>
-                    </div>
-
-                    {/* Stats & Contributors */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800 flex items-center gap-3">
-                             <Activity size={16} className="text-blue-500" />
-                             <div>
-                                 <div className="text-[10px] text-zinc-500 uppercase font-bold">Frequency</div>
-                                 <div className="text-sm font-mono text-zinc-200">{usageCount} refs</div>
-                             </div>
-                        </div>
-                        <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800">
-                             <div className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Contributors</div>
-                             <div className="flex -space-x-2">
-                                 {contributors.length > 0 ? contributors.map(r => (
-                                     <Avatar key={r.id} className="h-5 w-5 border border-zinc-800 ring-1 ring-black">
-                                         <AvatarFallback className="text-[8px]" style={{ backgroundColor: r.color, color: 'white' }}>{r.initials}</AvatarFallback>
-                                     </Avatar>
-                                 )) : <span className="text-xs text-zinc-600 italic">Unknown</span>}
-                             </div>
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Footer Action */}
-                <div className="bg-zinc-900/30 border-t border-zinc-800 p-2 flex justify-end">
-                    <Button variant="ghost" size="xs" className="text-zinc-500 hover:text-white">Edit Definition</Button>
-                </div>
-            </HoverCardContent>
-        </HoverCard>
-    );
-}
-
 // --- Helper Component for Inline Highlights ---
 
 const HighlightedText: React.FC<{
@@ -641,7 +606,10 @@ const HighlightedText: React.FC<{
     memos?: Memo[];
     researchTeam?: ResearchTeam;
     layersVisible: Record<LayerType, boolean>;
-}> = ({ text, paraStart, codings, codes, allCodings, memos = [], researchTeam, layersVisible }) => {
+    onHoverCode: (code: Code) => void;
+    onEditMemo: (memo: Memo) => void;
+    onLeaveHover: () => void;
+}> = ({ text, paraStart, codings, codes, allCodings, memos = [], researchTeam, layersVisible, onHoverCode, onEditMemo, onLeaveHover }) => {
     
     // If no layers active, just return text
     if (codings.length === 0 && memos.length === 0) return <>{text}</>;
@@ -697,10 +665,6 @@ const HighlightedText: React.FC<{
         let content = <>{segText}</>;
 
         // 2. Apply Code Highlighting (Underline/Color)
-        // Note: For inline highlights, we prioritize showing the specific Open Code color if available,
-        // even if Category layer is on, because Categories are visualized in the margin stripes primarily.
-        // However, if only Category layer is on, we try to use parent color.
-        
         const showOpenCodes = layersVisible[LayerType.OPEN_CODING];
         const showCategories = layersVisible[LayerType.CATEGORIES];
 
@@ -708,7 +672,6 @@ const HighlightedText: React.FC<{
             const coding = activeForSegment[0];
             let codeRef = codes.find(c => c.id === coding.codeId);
             
-            // If only showing categories, try to find parent color
             if (!showOpenCodes && showCategories && codeRef?.parentId) {
                 const parent = codes.find(c => c.id === codeRef!.parentId);
                 if (parent) codeRef = parent;
@@ -717,25 +680,20 @@ const HighlightedText: React.FC<{
             const color = codeRef?.color || '#666';
 
             if (codeRef) {
+                const codeToHover = codeRef;
                 content = (
-                    <CodeHoverCard 
+                    <span 
                         key={`code-${i}`}
-                        code={codeRef} 
-                        codes={codes}
-                        codings={allCodings} 
-                        researchTeam={researchTeam}
-                        side="top"
+                        className="transition-colors hover:brightness-110 cursor-pointer rounded-sm px-0.5 box-decoration-clone inline-block"
+                        style={{ 
+                            backgroundColor: `${color}40`,
+                            borderBottom: `2px solid ${color}`
+                        }}
+                        onMouseEnter={() => onHoverCode(codeToHover)}
+                        onMouseLeave={onLeaveHover}
                     >
-                         <span 
-                            className="transition-colors hover:brightness-110 cursor-pointer rounded-sm px-0.5 box-decoration-clone inline-block"
-                            style={{ 
-                                backgroundColor: `${color}40`,
-                                borderBottom: `2px solid ${color}`
-                            }}
-                        >
-                            {segText}
-                        </span>
-                    </CodeHoverCard>
+                        {segText}
+                    </span>
                 );
             }
         } else if (allActiveMemos.length > 0) {
@@ -744,7 +702,7 @@ const HighlightedText: React.FC<{
             content = <span key={i}>{segText}</span>;
         }
 
-        // 3. Apply Memo Highlighting & Icon
+        // 3. Apply Memo Highlighting & Icon (WITH HOVER CARD)
         if (allActiveMemos.length > 0) {
             const endingMemos = allActiveMemos.filter(m => 
                 (m.segment && Math.min(text.length, m.segment.end - paraStart) === segEnd) ||
@@ -753,33 +711,24 @@ const HighlightedText: React.FC<{
 
             if (endingMemos.length > 0) {
                 const primaryMemo = endingMemos[0];
-                const author = researchTeam?.researchers.find(r => r.id === primaryMemo.authorId);
-
                  segments.push(
                     <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10")}>
                         {content}
                         <sup className="ml-0.5 inline-flex">
-                            <HoverCard>
-                                <HoverCardTrigger>
-                                     <span className="flex items-center justify-center bg-amber-500 text-black text-[8px] font-bold rounded-sm h-3 px-0.5 cursor-help">
-                                         #{primaryMemo.number}
-                                     </span>
+                             <HoverCard openDelay={0}>
+                                <HoverCardTrigger asChild>
+                                    <span 
+                                        className="flex items-center justify-center bg-amber-500 text-black text-[8px] font-bold rounded-sm h-3 px-0.5 cursor-help"
+                                    >
+                                        #{primaryMemo.number}
+                                    </span>
                                 </HoverCardTrigger>
-                                <HoverCardContent side="top" className="w-64 bg-amber-50 border-amber-200 text-amber-900 shadow-xl">
-                                    <div className="font-bold text-xs border-b border-amber-200 pb-1 mb-1 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <StickyNote size={12}/> Annotation #{primaryMemo.number}
-                                        </div>
-                                        {author && (
-                                            <Avatar className="h-4 w-4">
-                                                <AvatarFallback style={{ backgroundColor: author.color, color: 'white', fontSize: '8px' }}>{author.initials}</AvatarFallback>
-                                            </Avatar>
-                                        )}
-                                    </div>
-                                    <div className="text-xs italic mb-2 text-amber-800/70">"{primaryMemo.segment?.text || primaryMemo.title}"</div>
-                                    <div className="text-sm font-medium leading-relaxed">{primaryMemo.content}</div>
+                                <HoverCardContent side="top" className="w-64 bg-zinc-950 border-zinc-800 p-3">
+                                    <div className="text-xs font-bold text-zinc-300 mb-1">Annotation #{primaryMemo.number}</div>
+                                    <div className="text-xs text-zinc-400 italic mb-2">"{primaryMemo.content}"</div>
+                                    <Button size="xs" variant="outline" className="w-full h-6 text-[10px]" onClick={() => onEditMemo(primaryMemo)}>Edit Note</Button>
                                 </HoverCardContent>
-                            </HoverCard>
+                             </HoverCard>
                         </sup>
                     </span>
                 )
