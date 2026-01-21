@@ -12,16 +12,64 @@ export interface CurationMetadata {
   dateCreated: string;
   consentObtained: boolean; // Legal/Ethical preservation
   preservationNotes?: string;
+  
+  // Link to specific Actor/Participant
+  participantId?: string;
 }
 
 export interface Artifact {
   id: string;
   name: string;
   content: string;
-  type: 'interview' | 'observation' | 'document';
+  // Expanded types based on ontology
+  type: 'interview' | 'observation' | 'document' | 'protocol' | 'bibliography';
   status: LifecycleStatus;
   curation: CurationMetadata;
 }
+
+// --- NEW GROUNDED THEORY ONTOLOGY ENTITIES ---
+
+export interface Participant {
+  id: string;
+  anonymizedCode: string; // e.g., P-001
+  description: string; // Demographics or role
+  isCoConstructor: boolean; // Constructivist perspective flag
+}
+
+export interface ResearchQuestion {
+  id: string;
+  content: string; // The question text
+}
+
+export type TypeOfMethod = 'interview' | 'observation' | 'survey' | 'focusgroup';
+
+export interface Method {
+  id: string;
+  type: TypeOfMethod;
+  protocolContent: string; // The protocol document content
+}
+
+export interface Tool {
+  id: string;
+  name: string;
+  referenceURL?: string;
+  version?: string;
+}
+
+export interface FieldOfStudy {
+  subjectOfStudy: string; // Description of the subject
+  objectOfStudy: string; // Description of the object
+  location: string;
+}
+
+export interface TheoreticalFramework {
+  researchQuestions: ResearchQuestion[];
+  methods: Method[];
+  tools: Tool[];
+  bibliographyContent: string; // Simple text content for bibliography
+}
+
+// ---------------------------
 
 // Enumeration of Grounded Theory approaches
 export type TheoryType = 'classic' | 'constructivist' | 'straussian';
@@ -111,7 +159,7 @@ export interface Memo {
   content: string;
   relatedIds: string[]; // Can relate to Artifact, Code, or Coding
   createdAt: string;
-  type: 'theoretical' | 'procedural' | 'observational';
+  type: 'theoretical' | 'procedural' | 'observational' | 'finding'; // Added 'finding'
   number: number; // Added sequence number for reference
   authorId?: string; // Track author
   segment?: {
@@ -158,4 +206,9 @@ export interface ProjectSettings {
   
   // Global theory configuration
   theoryType: TheoryType;
+  
+  // Extended Ontology
+  fieldOfStudy: FieldOfStudy;
+  theoreticalFramework: TheoreticalFramework;
+  participants: Participant[];
 }

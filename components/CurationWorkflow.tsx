@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Artifact, CurationMetadata, LifecycleStatus } from '../types';
+import { Artifact, CurationMetadata, LifecycleStatus, Participant } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -20,7 +20,8 @@ import {
   MoreHorizontal,
   Calendar,
   User,
-  FileType
+  FileType,
+  Users
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -29,6 +30,7 @@ interface CurationWorkflowProps {
   onUpdateArtifact: (id: string, updates: Partial<Artifact>) => void;
   onDeleteArtifact: (id: string) => void;
   onCreateArtifact: () => void;
+  participants: Participant[]; // Added participants prop
 }
 
 const COLUMNS: { id: LifecycleStatus; label: string; icon: React.ElementType; color: string }[] = [
@@ -42,7 +44,8 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
   artifacts, 
   onUpdateArtifact, 
   onDeleteArtifact,
-  onCreateArtifact 
+  onCreateArtifact,
+  participants
 }) => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -118,6 +121,7 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
                         artifact={artifact} 
                         onClick={() => setSelectedArtifactId(artifact.id)}
                         onDragStart={(e) => handleDragStart(e, artifact.id)}
+                        participant={participants.find(p => p.id === artifact.curation.participantId)}
                     />
                 ))}
                 {artifacts.filter(a => a.status === col.id).length === 0 && (
@@ -135,6 +139,7 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
       {selectedArtifactId && activeArtifact && (
           <CurationSidePanel 
              artifact={activeArtifact}
+             participants={participants}
              onClose={() => setSelectedArtifactId(null)}
              onUpdate={(updates) => onUpdateArtifact(activeArtifact.id, updates)}
              onDelete={() => {
@@ -153,7 +158,8 @@ const WorkflowCard: React.FC<{
     artifact: Artifact; 
     onClick: () => void;
     onDragStart: (e: React.DragEvent) => void;
-}> = ({ artifact, onClick, onDragStart }) => {
+    participant?: Participant;
+}> = ({ artifact, onClick, onDragStart, participant }) => {
     
     // Check for "Active" validity
     const isMissingMeta = artifact.status === 'active' && (!artifact.curation.consentObtained || !artifact.curation.format);
@@ -168,7 +174,7 @@ const WorkflowCard: React.FC<{
             <div className="flex items-start justify-between gap-2">
                  <div className="flex items-center gap-2 text-zinc-400">
                     <GripVertical size={14} className="opacity-0 group-hover:opacity-50 cursor-grab" />
-                    <span className="text-[10px] font-mono text-zinc-500 uppercase">{artifact.curation.format || 'Unknown Format'}</span>
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase">{artifact.type || 'DOC'}</span>
                  </div>
                  {isMissingMeta && (
                      <div title="Missing Metadata">
@@ -181,12 +187,15 @@ const WorkflowCard: React.FC<{
                 {artifact.name}
             </h4>
 
-            <div className="flex items-center gap-2 mt-2">
-                {artifact.type === 'interview' && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-zinc-800 text-zinc-500">Interview</Badge>}
-                {artifact.type === 'observation' && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-zinc-800 text-zinc-500">Obs</Badge>}
-                <span className="text-[10px] text-zinc-600 ml-auto">
+            <div className="flex items-center gap-2 mt-2 justify-between">
+                <span className="text-[10px] text-zinc-600">
                     {new Date(artifact.curation.dateCreated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
+                {participant && (
+                    <Badge variant="secondary" className="text-[9px] px-1 h-4 bg-blue-900/30 text-blue-400 border-none flex items-center gap-1">
+                        <User size={8} /> {participant.anonymizedCode}
+                    </Badge>
+                )}
             </div>
         </div>
     )
@@ -194,10 +203,11 @@ const WorkflowCard: React.FC<{
 
 const CurationSidePanel: React.FC<{
     artifact: Artifact;
+    participants: Participant[];
     onClose: () => void;
     onUpdate: (updates: Partial<Artifact>) => void;
     onDelete: () => void;
-}> = ({ artifact, onClose, onUpdate, onDelete }) => {
+}> = ({ artifact, participants, onClose, onUpdate, onDelete }) => {
     const [meta, setMeta] = useState<CurationMetadata>(artifact.curation);
 
     // Sync local state when artifact changes
@@ -241,14 +251,36 @@ const CurationSidePanel: React.FC<{
                     <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Metadata Properties</h3>
                     
                     <div className="space-y-1">
-                        <label className="text-[10px] text-zinc-400 flex items-center gap-1"><FileType size={10} /> Format</label>
-                        <Input 
-                            value={meta.format}
-                            onChange={(e) => setMeta({...meta, format: e.target.value})}
-                            className="h-8 text-sm bg-zinc-950 border-zinc-800" 
-                        />
+                        <label className="text-[10px] text-zinc-400 flex items-center gap-1"><FileType size={10} /> Type</label>
+                         <select 
+                            value={artifact.type}
+                            onChange={(e) => onUpdate({ type: e.target.value as any })}
+                            className="w-full bg-zinc-950 border border-zinc-800 text-sm p-1 rounded text-zinc-300"
+                        >
+                            <option value="document">Document</option>
+                            <option value="interview">Interview</option>
+                            <option value="observation">Observation</option>
+                            <option value="protocol">Protocol</option>
+                            <option value="bibliography">Bibliography</option>
+                        </select>
                     </div>
                     
+                    {artifact.type === 'interview' && (
+                         <div className="space-y-1">
+                            <label className="text-[10px] text-zinc-400 flex items-center gap-1"><Users size={10} /> Participant (Actor)</label>
+                            <select 
+                                value={meta.participantId || ''}
+                                onChange={(e) => setMeta({...meta, participantId: e.target.value})}
+                                className="w-full bg-zinc-950 border border-zinc-800 text-sm p-1 rounded text-zinc-300"
+                            >
+                                <option value="">-- Select Participant --</option>
+                                {participants.map(p => (
+                                    <option key={p.id} value={p.id}>{p.anonymizedCode} - {p.description}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="space-y-1">
                         <label className="text-[10px] text-zinc-400 flex items-center gap-1"><User size={10} /> Source / Provenance</label>
                         <Input 

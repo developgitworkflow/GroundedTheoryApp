@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { LayerControl } from './components/LayerControl';
 import { ArtifactView } from './components/ArtifactView';
 import { TheoryGraph } from './components/TheoryGraph';
@@ -9,11 +9,13 @@ import { MemoDirectory } from './components/MemoDirectory';
 import { SettingsDialog } from './components/SettingsDialog'; // New Import
 import { Visualizations } from './components/Visualizations'; // New Import
 import { suggestOntology } from './services/geminiService'; // New Import
+import { exportOntologyToOwl, parseOwlToCodes } from './lib/owlUtils'; // New Import
 import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher, Vote, VoteStatus } from './types';
 import { 
   FilePlus, 
   Settings, 
   Download, 
+  Upload,
   BrainCircuit,
   Search,
   Plus,
@@ -26,7 +28,8 @@ import {
   ChevronDown,
   Loader2,
   Users,
-  GraduationCap
+  GraduationCap,
+  FileJson
 } from 'lucide-react';
 
 // Design System Components
@@ -56,7 +59,8 @@ const INITIAL_ARTIFACTS: Artifact[] = [
             source: 'Field Interview',
             dateCreated: '2023-10-15',
             consentObtained: true,
-            preservationNotes: 'Subject requested anonymity in final publication.'
+            preservationNotes: 'Subject requested anonymity in final publication.',
+            participantId: 'p1'
         },
         content: `Interviewer: How do you feel about the remote work policy change?
 
@@ -103,7 +107,29 @@ const INITIAL_SETTINGS: ProjectSettings = {
   stripeWidth: 4,
   aiModel: "gemini-3-flash-preview",
   stopWords: ["the", "and", "is", "of", "to", "in", "it", "that", "was"],
-  theoryType: "constructivist" // Default approach
+  theoryType: "constructivist",
+  
+  // New Initial Data
+  fieldOfStudy: {
+      subjectOfStudy: 'Remote Employees',
+      objectOfStudy: 'Impact of Return-to-Office Mandates',
+      location: 'Tech Sector, North America'
+  },
+  participants: [
+      { id: 'p1', anonymizedCode: 'P-004', description: 'Software Engineer, 5yrs exp', isCoConstructor: true }
+  ],
+  theoreticalFramework: {
+      researchQuestions: [
+          { id: 'rq1', content: 'How do employees perceive trust in hybrid work environments?' }
+      ],
+      methods: [
+          { id: 'm1', type: 'interview', protocolContent: '1. Introduction\n2. Work History\n3. Reaction to Policy...' }
+      ],
+      tools: [
+          { id: 't1', name: 'Stratum CAQDAS', version: '1.0.0', referenceURL: 'https://stratum.app' }
+      ],
+      bibliographyContent: 'Charmaz, K. (2006). Constructing Grounded Theory.\nGlaser, B. G., & Strauss, A. L. (1967). The Discovery of Grounded Theory.'
+  }
 };
 
 const INITIAL_TEAM: ResearchTeam = {
@@ -165,9 +191,9 @@ const CodeTreeItem: React.FC<CodeTreeItemProps> = ({
         <div className="select-none">
             <div 
                 className={cn(
-                    "flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-800 rounded cursor-pointer transition-colors group",
+                    "flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-800 rounded cursor-pointer transition-colors group border-l-2 border-transparent",
                     code.isCore && "bg-yellow-950/10 hover:bg-yellow-950/20",
-                    selectedCodeId === code.id && "bg-blue-900/30 border border-blue-800/50"
+                    selectedCodeId === code.id ? "bg-blue-900/30 border-blue-500" : "hover:border-zinc-700"
                 )}
                 style={{ marginLeft: `${depth * 12}px` }}
                 onClick={() => onNodeClick(code.id)}
@@ -179,13 +205,13 @@ const CodeTreeItem: React.FC<CodeTreeItemProps> = ({
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </div>
 
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
+                <div className="w-2 h-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: code.color }} />
                 
                 <span className={cn("text-xs font-medium truncate flex-1", code.isCore ? "text-yellow-500" : "text-zinc-300", selectedCodeId === code.id && "text-blue-200")}>
                     {code.name}
                 </span>
 
-                {code.kind === 'category' && <span className="text-[9px] text-zinc-500 uppercase font-mono bg-zinc-800 px-1 rounded">CAT</span>}
+                {code.kind === 'category' && <span className="text-[9px] text-zinc-500 uppercase font-mono bg-zinc-800 px-1 rounded border border-zinc-700">CAT</span>}
                 {code.isCore && <span className="text-[8px] text-yellow-600">★</span>}
                 
                 <span className="text-[9px] text-zinc-600 font-mono w-5 text-right">
@@ -221,6 +247,9 @@ export default function App() {
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('codes'); // Right sidebar state
   const [codeSearchTerm, setCodeSearchTerm] = useState('');
+  
+  // File Import Refs
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Settings State
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(INITIAL_SETTINGS);
@@ -274,6 +303,63 @@ export default function App() {
   const toggleLayer = (id: LayerType) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
   };
+
+  // Import / Export Logic
+  const handleExportOwl = () => {
+    const owlString = exportOntologyToOwl(codes, projectSettings.projectName);
+    const blob = new Blob([owlString], { type: 'application/rdf+xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${projectSettings.projectName.replace(/\s+/g, '_')}_ontology.owl`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addJournalEntry("Exported ontology to OWL file", 'auto');
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+        const text = await file.text();
+        // Naive check for format
+        if (text.includes('rdf:RDF')) {
+            const importedCodes = parseOwlToCodes(text);
+            if (importedCodes.length > 0) {
+                // Merge strategy: Append with ID conflict check
+                const newCodes = [...codes];
+                let addedCount = 0;
+                importedCodes.forEach(ic => {
+                    const exists = newCodes.find(c => c.id === ic.id);
+                    if (!exists) {
+                        newCodes.push(ic);
+                        addedCount++;
+                    }
+                });
+                setCodes(newCodes);
+                addJournalEntry(`Imported OWL ontology. Added ${addedCount} new codes.`, 'auto');
+            } else {
+                alert("No valid codes found in OWL file.");
+            }
+        } else {
+            alert("File does not appear to be a valid RDF/XML OWL ontology.");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Failed to parse file.");
+    }
+    
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
 
   // Voting Handler
   const handleVote = (criterionId: string, status: VoteStatus, comment?: string) => {
@@ -492,6 +578,15 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
+      {/* Hidden File Input for Import */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileImport} 
+        className="hidden" 
+        accept=".owl,.xml" 
+      />
+
       {/* Header */}
       <header className="h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-6 shrink-0 z-30">
         <div className="flex items-center gap-6">
@@ -610,6 +705,7 @@ export default function App() {
                         onUpdateArtifact={handleUpdateArtifact}
                         onDeleteArtifact={handleDeleteArtifact}
                         onCreateArtifact={handleCreateArtifact}
+                        participants={projectSettings.participants}
                     />
                 </TabsContent>
 
@@ -659,7 +755,7 @@ export default function App() {
                 <TabsContent value="memos" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
                     <TheoryBuilder 
                         codes={codes}
-                        memos={memos.filter(m => m.type === 'theoretical')}
+                        memos={memos.filter(m => m.type === 'theoretical' || m.type === 'finding')}
                         onSetCoreCategory={handleSetCoreCategory}
                         onAddMemo={handleAddTheoryMemo}
                         theoryArtefact={theoryArtefact}
@@ -691,27 +787,84 @@ export default function App() {
 
                         {/* TAB 1: CODEBOOK (ONTOLOGY) */}
                         <TabsContent value="codes" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
-                             <div className="p-3 border-b border-zinc-800">
-                                <div className="relative mb-2">
+                             <div className="p-3 border-b border-zinc-800 space-y-3">
+                                {/* Search Bar */}
+                                <div className="relative">
                                     <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
                                     <Input 
-                                        className="pl-8 h-9 bg-zinc-950 border-zinc-800" 
+                                        className="pl-8 pr-8 h-9 bg-zinc-950 border-zinc-800" 
                                         placeholder="Filter codes..." 
                                         value={codeSearchTerm}
                                         onChange={(e) => setCodeSearchTerm(e.target.value)}
                                     />
+                                    {codeSearchTerm && (
+                                        <button 
+                                            onClick={() => setCodeSearchTerm('')}
+                                            className="absolute right-2.5 top-2.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                                            aria-label="Clear search"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
                                 </div>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="w-full text-xs gap-2 bg-zinc-900/50 hover:bg-indigo-900/20 hover:text-indigo-400 hover:border-indigo-800 border-zinc-700"
-                                    onClick={handleElaborateOntology}
-                                    disabled={isElaborating}
-                                >
-                                    {isElaborating ? <Loader2 size={12} className="animate-spin" /> : <GitMerge size={12} />}
-                                    {isElaborating ? 'Analyzing Relations...' : 'Elaborate Ontology (AI)'}
-                                </Button>
+
+                                {/* Active Filter Banner */}
+                                {codeFilter && (
+                                    <div className="flex items-center justify-between px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-md text-xs text-blue-200 animate-in fade-in slide-in-from-top-1">
+                                        <div className="flex items-center gap-2 truncate">
+                                            <Tag size={12} className="text-blue-400 shrink-0" />
+                                            <span className="truncate">
+                                                Filtering by: <span className="font-semibold text-blue-100">{codes.find(c => c.id === codeFilter)?.name}</span>
+                                            </span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setCodeFilter(null)}
+                                            className="text-blue-400 hover:text-white hover:bg-blue-500/20 rounded p-0.5 transition-colors"
+                                            title="Clear filter"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                )}
+                                
+                                {/* Toolbar */}
+                                <div className="flex items-center gap-1.5">
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="flex-1 text-[10px] h-7 gap-2 bg-zinc-900/50 hover:bg-indigo-900/20 hover:text-indigo-400 border-zinc-700"
+                                        onClick={handleElaborateOntology}
+                                        disabled={isElaborating}
+                                        title="Use AI to structure flat codes into hierarchy"
+                                    >
+                                        {isElaborating ? <Loader2 size={10} className="animate-spin" /> : <GitMerge size={10} />}
+                                        {isElaborating ? 'Thinking...' : 'Structure AI'}
+                                    </Button>
+
+                                    {/* Data Management Group */}
+                                    <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5">
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 text-zinc-400 hover:text-white" 
+                                            onClick={handleImportClick}
+                                            title="Import OWL Ontology"
+                                        >
+                                            <Upload size={14} />
+                                        </Button>
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-7 w-7 text-zinc-400 hover:text-white" 
+                                            onClick={handleExportOwl}
+                                            title="Export to OWL"
+                                        >
+                                            <Download size={14} />
+                                        </Button>
+                                    </div>
+                                </div>
                             </div>
+
                             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
                                 <div className="flex flex-col">
                                     {rootCodes.length > 0 ? (
@@ -727,8 +880,10 @@ export default function App() {
                                             />
                                         ))
                                     ) : (
-                                        <div className="p-4 text-center text-zinc-500 text-xs">
-                                            No codes yet. Start coding by selecting text.
+                                        <div className="p-4 text-center text-zinc-500 text-xs flex flex-col items-center gap-2 mt-8">
+                                            <FileJson size={32} className="opacity-20" />
+                                            <p>No codes defined.</p>
+                                            <p className="opacity-50">Create manually or import an ontology.</p>
                                         </div>
                                     )}
                                 </div>

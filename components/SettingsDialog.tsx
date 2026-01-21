@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria } from '../types';
+import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool } from '../types';
 import { 
   Settings, 
   User, 
@@ -17,7 +17,12 @@ import {
   ShieldCheck,
   Plus,
   Trash2,
-  Check
+  Check,
+  FileQuestion,
+  Wrench,
+  Book,
+  Microscope,
+  PersonStanding
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -52,7 +57,105 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
     onClose();
   };
 
-  // Team Management Handlers
+  // --- Helpers for updating nested state ---
+
+  const updateFieldOfStudy = (updates: Partial<typeof localSettings.fieldOfStudy>) => {
+      setLocalSettings(prev => ({ ...prev, fieldOfStudy: { ...prev.fieldOfStudy, ...updates } }));
+  };
+
+  const addParticipant = () => {
+      const newP: Participant = { id: `p-${Date.now()}`, anonymizedCode: 'P-XXX', description: 'New Participant', isCoConstructor: false };
+      setLocalSettings(prev => ({ ...prev, participants: [...prev.participants, newP] }));
+  };
+
+  const updateParticipant = (id: string, updates: Partial<Participant>) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          participants: prev.participants.map(p => p.id === id ? { ...p, ...updates } : p)
+      }));
+  };
+
+  const removeParticipant = (id: string) => {
+      setLocalSettings(prev => ({ ...prev, participants: prev.participants.filter(p => p.id !== id) }));
+  };
+
+  const addRQ = () => {
+      const newRQ: ResearchQuestion = { id: `rq-${Date.now()}`, content: 'New Research Question?' };
+      setLocalSettings(prev => ({ 
+          ...prev, 
+          theoreticalFramework: { ...prev.theoreticalFramework, researchQuestions: [...prev.theoreticalFramework.researchQuestions, newRQ] }
+      }));
+  };
+
+  const updateRQ = (id: string, content: string) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          theoreticalFramework: { 
+              ...prev.theoreticalFramework, 
+              researchQuestions: prev.theoreticalFramework.researchQuestions.map(r => r.id === id ? { ...r, content } : r)
+          }
+      }));
+  };
+
+  const removeRQ = (id: string) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          theoreticalFramework: { ...prev.theoreticalFramework, researchQuestions: prev.theoreticalFramework.researchQuestions.filter(r => r.id !== id) }
+      }));
+  };
+
+   const addMethod = () => {
+      const newMethod: Method = { id: `m-${Date.now()}`, type: 'interview', protocolContent: 'Standard Protocol...' };
+      setLocalSettings(prev => ({ 
+          ...prev, 
+          theoreticalFramework: { ...prev.theoreticalFramework, methods: [...prev.theoreticalFramework.methods, newMethod] }
+      }));
+  };
+
+  const updateMethod = (id: string, updates: Partial<Method>) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          theoreticalFramework: { 
+              ...prev.theoreticalFramework, 
+              methods: prev.theoreticalFramework.methods.map(m => m.id === id ? { ...m, ...updates } : m)
+          }
+      }));
+  };
+
+  const removeMethod = (id: string) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          theoreticalFramework: { ...prev.theoreticalFramework, methods: prev.theoreticalFramework.methods.filter(m => m.id !== id) }
+      }));
+  };
+
+  const addTool = () => {
+      const newTool: Tool = { id: `t-${Date.now()}`, name: 'New Tool', version: '1.0' };
+      setLocalSettings(prev => ({ 
+          ...prev, 
+          theoreticalFramework: { ...prev.theoreticalFramework, tools: [...prev.theoreticalFramework.tools, newTool] }
+      }));
+  };
+
+  const updateTool = (id: string, updates: Partial<Tool>) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          theoreticalFramework: { 
+              ...prev.theoreticalFramework, 
+              tools: prev.theoreticalFramework.tools.map(t => t.id === id ? { ...t, ...updates } : t)
+          }
+      }));
+  };
+
+  const removeTool = (id: string) => {
+       setLocalSettings(prev => ({
+          ...prev,
+          theoreticalFramework: { ...prev.theoreticalFramework, tools: prev.theoreticalFramework.tools.filter(t => t.id !== id) }
+      }));
+  };
+
+
+  // --- Team Management Handlers ---
   const addResearcher = () => {
     const newResearcher: Researcher = {
         id: `r-${Date.now()}`,
@@ -105,7 +208,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-[800px] h-[600px] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="w-[900px] h-[700px] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-950">
@@ -114,8 +217,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                <Settings size={20} className="text-zinc-400" />
             </div>
             <div>
-               <h2 className="text-lg font-semibold text-zinc-100">Project Preferences</h2>
-               <p className="text-xs text-zinc-500">Global configuration for Stratum CAQDAS</p>
+               <h2 className="text-lg font-semibold text-zinc-100">Project Configuration</h2>
+               <p className="text-xs text-zinc-500">Global settings and theoretical framework.</p>
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
@@ -126,7 +229,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
             {/* Sidebar Navigation */}
-            <div className="w-56 bg-zinc-900/50 border-r border-zinc-800 p-4 flex flex-col gap-1">
+            <div className="w-56 bg-zinc-900/50 border-r border-zinc-800 p-4 flex flex-col gap-1 overflow-y-auto">
                 <NavButton 
                     active={activeTab === 'general'} 
                     onClick={() => setActiveTab('general')} 
@@ -139,19 +242,37 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     icon={Users} 
                     label="Team & Roles" 
                 />
+                
+                <div className="h-px bg-zinc-800 my-2 mx-2" />
+                <div className="px-3 py-1 text-[10px] uppercase font-bold text-zinc-600">Ontology</div>
+                
                 <NavButton 
-                    active={activeTab === 'project'} 
-                    onClick={() => setActiveTab('project')} 
-                    icon={Database} 
-                    label="Project Data" 
+                    active={activeTab === 'participants'} 
+                    onClick={() => setActiveTab('participants')} 
+                    icon={PersonStanding} 
+                    label="Participants (Actors)" 
                 />
                  <NavButton 
+                    active={activeTab === 'methodology'} 
+                    onClick={() => setActiveTab('methodology')} 
+                    icon={Microscope} 
+                    label="Methodology" 
+                />
+                <NavButton 
                     active={activeTab === 'theory'} 
                     onClick={() => setActiveTab('theory')} 
                     icon={ScrollText} 
-                    label="Theory Methodology" 
+                    label="Theory Approach" 
                 />
+                <NavButton 
+                    active={activeTab === 'resources'} 
+                    onClick={() => setActiveTab('resources')} 
+                    icon={Wrench} 
+                    label="Tools & Refs" 
+                />
+
                 <div className="h-px bg-zinc-800 my-2 mx-2" />
+                
                 <NavButton 
                     active={activeTab === 'analysis'} 
                     onClick={() => setActiveTab('analysis')} 
@@ -171,29 +292,226 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 
                 {activeTab === 'general' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                        <SectionHeader title="User Identity" description="Used for tracking contributions in team projects." />
+                        <SectionHeader title="Project Metadata" description="Core information about this research project." />
+                        
                         <div className="grid gap-4">
                             <div className="grid gap-2">
-                                <label className="text-sm font-medium text-zinc-300">Display Name</label>
+                                <label className="text-sm font-medium text-zinc-300">Project Title</label>
                                 <Input 
-                                    value={localSettings.userName}
-                                    onChange={(e) => setLocalSettings({...localSettings, userName: e.target.value})}
-                                    className="max-w-md"
+                                    value={localSettings.projectName}
+                                    onChange={(e) => setLocalSettings({...localSettings, projectName: e.target.value})}
                                 />
+                            </div>
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-zinc-300">Description</label>
+                                <Textarea className="h-20" placeholder="Research abstract..." />
                             </div>
                         </div>
 
                         <div className="h-px bg-zinc-800 my-4" />
 
-                        <SectionHeader title="Interface" description="Customize the application appearance." />
-                        <div className="flex items-center gap-4">
-                            <div className="p-4 border border-blue-600 bg-blue-900/10 rounded-lg w-32 text-center cursor-pointer">
-                                <div className="w-full h-16 bg-zinc-900 rounded mb-2 border border-zinc-800"></div>
-                                <span className="text-xs font-medium text-blue-400">Dark (Default)</span>
-                            </div>
-                            <div className="p-4 border border-zinc-800 bg-zinc-900/20 rounded-lg w-32 text-center opacity-50 cursor-not-allowed" title="Coming soon">
-                                <div className="w-full h-16 bg-zinc-100 rounded mb-2 border border-zinc-300"></div>
-                                <span className="text-xs font-medium text-zinc-500">Light</span>
+                        <SectionHeader title="Field of Study" description="Define the subject, object, and location." />
+                        <div className="grid gap-4 bg-zinc-900/30 p-4 rounded border border-zinc-800">
+                             <div className="grid gap-2">
+                                <label className="text-xs font-bold uppercase text-zinc-500">Subject of Study (Actors)</label>
+                                <Input 
+                                    value={localSettings.fieldOfStudy.subjectOfStudy}
+                                    onChange={(e) => updateFieldOfStudy({ subjectOfStudy: e.target.value })}
+                                    className="bg-zinc-950"
+                                />
+                             </div>
+                             <div className="grid gap-2">
+                                <label className="text-xs font-bold uppercase text-zinc-500">Object of Study (Phenomenon)</label>
+                                <Input 
+                                    value={localSettings.fieldOfStudy.objectOfStudy}
+                                    onChange={(e) => updateFieldOfStudy({ objectOfStudy: e.target.value })}
+                                    className="bg-zinc-950"
+                                />
+                             </div>
+                             <div className="grid gap-2">
+                                <label className="text-xs font-bold uppercase text-zinc-500">Location</label>
+                                <Input 
+                                    value={localSettings.fieldOfStudy.location}
+                                    onChange={(e) => updateFieldOfStudy({ location: e.target.value })}
+                                    className="bg-zinc-950"
+                                />
+                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'participants' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-start">
+                             <SectionHeader title="Participants (Actors)" description="Individuals involved in the research. Assign anonymized codes." />
+                             <Button size="xs" variant="brand" onClick={addParticipant} className="gap-2"><Plus size={14}/> Add Actor</Button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {localSettings.participants.map(p => (
+                                <div key={p.id} className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg flex gap-3 items-start group">
+                                     <div className="w-10 h-10 rounded bg-blue-900/20 text-blue-400 flex items-center justify-center shrink-0">
+                                         <User size={18} />
+                                     </div>
+                                     <div className="flex-1 space-y-2">
+                                         <div className="flex gap-2">
+                                             <Input 
+                                                 value={p.anonymizedCode}
+                                                 onChange={(e) => updateParticipant(p.id, { anonymizedCode: e.target.value })}
+                                                 placeholder="Code (e.g. P01)"
+                                                 className="w-32 h-8 bg-zinc-950"
+                                             />
+                                             <Input 
+                                                 value={p.description}
+                                                 onChange={(e) => updateParticipant(p.id, { description: e.target.value })}
+                                                 placeholder="Description / Role..."
+                                                 className="flex-1 h-8 bg-zinc-950"
+                                             />
+                                         </div>
+                                         <div className="flex items-center gap-2">
+                                            <label className="text-[10px] uppercase font-bold text-zinc-500 flex items-center gap-1 cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={p.isCoConstructor}
+                                                    onChange={(e) => updateParticipant(p.id, { isCoConstructor: e.target.checked })}
+                                                    className="accent-blue-500"
+                                                />
+                                                Co-Constructor of Meaning
+                                            </label>
+                                         </div>
+                                     </div>
+                                     <Button size="icon" variant="ghost" onClick={() => removeParticipant(p.id)} className="h-8 w-8 text-zinc-600 hover:text-red-500">
+                                        <Trash2 size={14} />
+                                     </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'methodology' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                        {/* Research Questions */}
+                        <div>
+                             <div className="flex justify-between items-start mb-4">
+                                <SectionHeader title="Research Questions" description="The questions guiding the inquiry." />
+                                <Button size="xs" variant="outline" onClick={addRQ} className="gap-2"><Plus size={14}/> Add RQ</Button>
+                             </div>
+                             <div className="space-y-2">
+                                {localSettings.theoreticalFramework.researchQuestions.map(rq => (
+                                    <div key={rq.id} className="flex gap-2">
+                                        <div className="p-2 bg-zinc-900 rounded border border-zinc-800 text-zinc-500">
+                                            <FileQuestion size={16} />
+                                        </div>
+                                        <Input 
+                                            value={rq.content}
+                                            onChange={(e) => updateRQ(rq.id, e.target.value)}
+                                            className="flex-1 bg-zinc-900/50"
+                                        />
+                                        <Button size="icon" variant="ghost" onClick={() => removeRQ(rq.id)} className="text-zinc-600 hover:text-red-500">
+                                            <Trash2 size={14} />
+                                        </Button>
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+
+                        <div className="h-px bg-zinc-800" />
+
+                        {/* Methods */}
+                        <div>
+                             <div className="flex justify-between items-start mb-4">
+                                <SectionHeader title="Methods & Protocols" description="Data collection strategies." />
+                                <Button size="xs" variant="outline" onClick={addMethod} className="gap-2"><Plus size={14}/> Add Method</Button>
+                             </div>
+                             <div className="space-y-4">
+                                {localSettings.theoreticalFramework.methods.map(m => (
+                                    <div key={m.id} className="p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className="uppercase text-[10px]">{m.type}</Badge>
+                                                <select 
+                                                    value={m.type}
+                                                    onChange={(e) => updateMethod(m.id, { type: e.target.value as any })}
+                                                    className="bg-zinc-950 border border-zinc-700 text-xs rounded p-1 text-zinc-300"
+                                                >
+                                                    <option value="interview">Interview</option>
+                                                    <option value="observation">Observation</option>
+                                                    <option value="survey">Survey</option>
+                                                    <option value="focusgroup">Focus Group</option>
+                                                </select>
+                                            </div>
+                                            <Button size="icon" variant="ghost" onClick={() => removeMethod(m.id)} className="h-6 w-6 text-zinc-600 hover:text-red-500">
+                                                <Trash2 size={14} />
+                                            </Button>
+                                        </div>
+                                        <Textarea 
+                                            value={m.protocolContent}
+                                            onChange={(e) => updateMethod(m.id, { protocolContent: e.target.value })}
+                                            placeholder="Enter Protocol content here..."
+                                            className="bg-zinc-950 text-xs font-mono h-24"
+                                        />
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'resources' && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                        {/* Tools */}
+                        <div>
+                             <div className="flex justify-between items-start mb-4">
+                                <SectionHeader title="Research Tools" description="Software and instruments used." />
+                                <Button size="xs" variant="outline" onClick={addTool} className="gap-2"><Plus size={14}/> Add Tool</Button>
+                             </div>
+                             <div className="space-y-2">
+                                {localSettings.theoreticalFramework.tools.map(t => (
+                                    <div key={t.id} className="flex gap-2 items-center p-2 bg-zinc-900/50 border border-zinc-800 rounded">
+                                        <Wrench size={14} className="text-zinc-500 ml-2" />
+                                        <Input 
+                                            value={t.name}
+                                            onChange={(e) => updateTool(t.id, { name: e.target.value })}
+                                            placeholder="Tool Name"
+                                            className="w-1/3 bg-zinc-950 h-8 text-xs"
+                                        />
+                                        <Input 
+                                            value={t.version}
+                                            onChange={(e) => updateTool(t.id, { version: e.target.value })}
+                                            placeholder="Version"
+                                            className="w-24 bg-zinc-950 h-8 text-xs"
+                                        />
+                                        <Input 
+                                            value={t.referenceURL}
+                                            onChange={(e) => updateTool(t.id, { referenceURL: e.target.value })}
+                                            placeholder="URL"
+                                            className="flex-1 bg-zinc-950 h-8 text-xs"
+                                        />
+                                        <Button size="icon" variant="ghost" onClick={() => removeTool(t.id)} className="h-8 w-8 text-zinc-600 hover:text-red-500">
+                                            <Trash2 size={14} />
+                                        </Button>
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+
+                        <div className="h-px bg-zinc-800" />
+
+                        {/* Bibliography */}
+                        <div>
+                            <SectionHeader title="Bibliography" description="Literature references." />
+                            <div className="flex gap-3 items-start">
+                                <Book size={20} className="text-zinc-500 mt-2" />
+                                <Textarea 
+                                    value={localSettings.theoreticalFramework.bibliographyContent}
+                                    onChange={(e) => setLocalSettings({
+                                        ...localSettings, 
+                                        theoreticalFramework: { ...localSettings.theoreticalFramework, bibliographyContent: e.target.value }
+                                    })}
+                                    className="min-h-[200px] font-mono text-sm bg-zinc-900"
+                                    placeholder="Paste bibliography here..."
+                                />
                             </div>
                         </div>
                     </div>
@@ -310,28 +628,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                      />
                                  </div>
                              ))}
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'project' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                        <SectionHeader title="Project Metadata" description="Core information about this research project." />
-                        
-                        <div className="grid gap-2">
-                            <label className="text-sm font-medium text-zinc-300">Project Title</label>
-                            <Input 
-                                value={localSettings.projectName}
-                                onChange={(e) => setLocalSettings({...localSettings, projectName: e.target.value})}
-                            />
-                        </div>
-
-                        <div className="grid gap-2">
-                             <label className="text-sm font-medium text-zinc-300">Description / Abstract</label>
-                             <Textarea 
-                                className="h-32" 
-                                placeholder="Describe the research goals, methodology, and scope..." 
-                            />
                         </div>
                     </div>
                 )}
