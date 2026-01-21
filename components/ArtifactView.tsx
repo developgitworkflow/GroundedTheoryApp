@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus } from '../types';
+import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
@@ -10,6 +10,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { ConsensusPanel } from './ConsensusPanel';
+import { ArtifactPropertiesPanel } from './ArtifactPropertiesPanel';
 
 interface ArtifactViewProps {
   artifact: Artifact;
@@ -29,6 +30,8 @@ interface ArtifactViewProps {
   highlightedMemoId?: string;
   selectedCodeId?: string | null;
   onClearSelection?: () => void;
+  onUpdateArtifact?: (id: string, updates: Partial<Artifact>) => void;
+  participants?: Participant[];
 }
 
 export const ArtifactView: React.FC<ArtifactViewProps> = ({ 
@@ -47,7 +50,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   onEditMemo,
   highlightedMemoId,
   selectedCodeId,
-  onClearSelection
+  onClearSelection,
+  onUpdateArtifact,
+  participants = []
 }) => {
   const [selection, setSelection] = useState<{start: number, end: number, text: string, rect: DOMRect} | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -55,6 +60,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const [memoInput, setMemoInput] = useState('');
   const [showMemoInput, setShowMemoInput] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const memoRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -221,6 +227,17 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             />
         )}
 
+        {/* Properties Panel Overlay */}
+        {isPropertiesOpen && researchTeam && onUpdateArtifact && (
+            <ArtifactPropertiesPanel
+                artifact={artifact}
+                participants={participants}
+                researchers={researchTeam.researchers}
+                onUpdate={(updates) => onUpdateArtifact(artifact.id, updates)}
+                onClose={() => setIsPropertiesOpen(false)}
+            />
+        )}
+
         {/* Helper Toolbar (Floating) for New Selection */}
         {selection && (
             <div 
@@ -357,7 +374,15 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             </Badge>
                         )}
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-zinc-500">
+                    <div className="flex items-center gap-3 text-xs text-zinc-500">
+                        <Button
+                            variant={isPropertiesOpen ? "secondary" : "outline"}
+                            size="sm"
+                            className="h-7 text-xs gap-2"
+                            onClick={() => setIsPropertiesOpen(!isPropertiesOpen)}
+                        >
+                            <Info size={14} /> Properties
+                        </Button>
                         <Button 
                             variant={isReviewOpen ? "brand" : "outline"} 
                             size="sm" 
@@ -366,7 +391,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                         >
                             <GitPullRequest size={14} /> Review Status
                         </Button>
-                        <div className="w-px h-4 bg-zinc-700" />
+                        <div className="w-px h-4 bg-zinc-700 mx-2" />
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> {codings.length} Codings</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> {memos.length} Memos</span>
                     </div>

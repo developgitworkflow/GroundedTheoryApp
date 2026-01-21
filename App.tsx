@@ -432,9 +432,11 @@ export default function App() {
       }
   };
 
-  const handleUpdateMemo = (id: string, content: string) => {
-    setMemos(prev => prev.map(m => m.id === id ? { ...m, content } : m));
-    addJournalEntry(`Updated annotation ${id}`, 'manual');
+  const handleUpdateMemo = (id: string, updates: Partial<Memo> | string) => {
+    // Overloaded to support string content update (legacy) or full partial update
+    const actualUpdates = typeof updates === 'string' ? { content: updates } : updates;
+    setMemos(prev => prev.map(m => m.id === id ? { ...m, ...actualUpdates } : m));
+    if (typeof updates === 'string') addJournalEntry(`Updated annotation ${id}`, 'manual');
   };
 
   const handleAddTheoryMemo = (title: string, content: string) => {
@@ -647,6 +649,8 @@ export default function App() {
                                 onEditMemo={openMemoEditor} 
                                 selectedCodeId={codeFilter}
                                 onClearSelection={() => setCodeFilter(null)}
+                                onUpdateArtifact={handleUpdateArtifact}
+                                participants={projectSettings.participants}
                             />
                             )}
 
@@ -672,8 +676,10 @@ export default function App() {
                     <TheoryBuilder 
                         codes={codes}
                         memos={memos.filter(m => m.type === 'theoretical' || m.type === 'finding')}
+                        researchQuestions={projectSettings.theoreticalFramework.researchQuestions}
                         onSetCoreCategory={handleSetCoreCategory}
                         onAddMemo={handleAddTheoryMemo}
+                        onUpdateMemo={handleUpdateMemo}
                         theoryArtefact={theoryArtefact}
                     />
                 </TabsContent>

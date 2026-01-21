@@ -83,6 +83,28 @@ const COLUMNS: { id: TypeOfStatus; label: string; subLabel: string; icon: React.
   },
 ];
 
+const getStatusColor = (status: TypeOfStatus) => {
+    switch(status) {
+        case 'problem_statement': return "bg-amber-500/10 text-amber-500 border-amber-500/20";
+        case 'acquisition': return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+        case 'management': return "bg-indigo-500/10 text-indigo-500 border-indigo-500/20";
+        case 'analysis': return "bg-purple-500/10 text-purple-500 border-purple-500/20";
+        case 'report': return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+        default: return "bg-zinc-800 text-zinc-400 border-zinc-700";
+    }
+};
+
+const getPhaseLabel = (status: TypeOfStatus) => {
+    switch(status) {
+        case 'problem_statement': return "Phase I";
+        case 'acquisition': return "Phase II";
+        case 'management': return "Phase III";
+        case 'analysis': return "Phase IV";
+        case 'report': return "Phase V";
+        default: return "";
+    }
+};
+
 export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({ 
   artifacts, 
   onUpdateArtifact, 
@@ -252,11 +274,17 @@ const WorkflowCard: React.FC<{
                 <span className="text-[10px] text-zinc-600">
                     {new Date(artifact.curation.dateCreated).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
-                {participant && (
-                    <Badge variant="secondary" className="text-[9px] px-1 h-4 bg-blue-900/30 text-blue-400 border-none flex items-center gap-1">
-                        <User size={8} /> {participant.anonymizedCode}
+                
+                <div className="flex items-center gap-1">
+                     <Badge variant="outline" className={cn("text-[9px] px-1 h-4", getStatusColor(artifact.status))}>
+                        {getPhaseLabel(artifact.status)}
                     </Badge>
-                )}
+                    {participant && (
+                        <Badge variant="secondary" className="text-[9px] px-1 h-4 bg-blue-900/30 text-blue-400 border-none flex items-center gap-1">
+                            <User size={8} /> {participant.anonymizedCode}
+                        </Badge>
+                    )}
+                </div>
             </div>
         </div>
     )
@@ -279,17 +307,6 @@ const CurationSidePanel: React.FC<{
 
     const handleSave = () => {
         onUpdate({ curation: meta });
-    };
-
-    const getStatusColor = (status: TypeOfStatus) => {
-        switch(status) {
-            case 'problem_statement': return "bg-amber-500/10 text-amber-500";
-            case 'acquisition': return "bg-blue-500/10 text-blue-500";
-            case 'management': return "bg-indigo-500/10 text-indigo-500";
-            case 'analysis': return "bg-purple-500/10 text-purple-500";
-            case 'report': return "bg-emerald-500/10 text-emerald-500";
-            default: return "bg-zinc-800 text-zinc-400";
-        }
     };
 
     return (
