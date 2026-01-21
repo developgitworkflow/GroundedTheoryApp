@@ -39,7 +39,7 @@ const HoverCardTrigger: React.FC<React.HTMLAttributes<HTMLDivElement> & { asChil
   ...props 
 }) => {
   const context = React.useContext(HoverCardContext);
-  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!context) throw new Error("HoverCardTrigger must be used within HoverCard");
 
@@ -61,16 +61,17 @@ const HoverCardTrigger: React.FC<React.HTMLAttributes<HTMLDivElement> & { asChil
 
   // If asChild is true, we need to clone the child to attach event listeners
   if (asChild && React.isValidElement(children)) {
-      return React.cloneElement(children as React.ReactElement<any>, {
+      const child = children as React.ReactElement<any>;
+      return React.cloneElement(child, {
           onMouseEnter: (e: React.MouseEvent) => {
               handleMouseEnter();
-              children.props.onMouseEnter?.(e);
+              child.props.onMouseEnter?.(e);
           },
           onMouseLeave: (e: React.MouseEvent) => {
               handleMouseLeave();
-              children.props.onMouseLeave?.(e);
+              child.props.onMouseLeave?.(e);
           },
-          className: cn(children.props.className, className)
+          className: cn(child.props.className, className)
       });
   }
 
