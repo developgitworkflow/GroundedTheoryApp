@@ -4,7 +4,10 @@ export interface Project {
   name: string;
 }
 
-export type LifecycleStatus = 'inbox' | 'appraisal' | 'active' | 'archived' | 'disposed';
+// Updated Enums based on requirements
+export type TypeOfMedia = 'video' | 'text' | 'audio' | 'dataset' | 'software';
+export type TypeOfAccess = 'public' | 'private';
+export type TypeOfStatus = 'pending' | 'in progress' | 'complete';
 
 export interface CurationMetadata {
   format: string; // Representation Information
@@ -18,12 +21,21 @@ export interface CurationMetadata {
 }
 
 export interface Artifact {
-  id: string;
+  id: string; // Internal system ID
+  hashID: string; // Unique identifier (e.g. Sha256)
   name: string;
   content: string;
-  // Expanded types based on ontology
+  
+  // Methodological type (kept for app logic)
   type: 'interview' | 'observation' | 'document' | 'protocol' | 'bibliography';
-  status: LifecycleStatus;
+  
+  // New properties
+  media: TypeOfMedia;
+  access: TypeOfAccess;
+  status: TypeOfStatus;
+  
+  responsibleId?: string; // Link to Researcher
+  
   curation: CurationMetadata;
 }
 

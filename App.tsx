@@ -44,9 +44,13 @@ const INITIAL_LAYERS: LayerConfig[] = [
 const INITIAL_ARTIFACTS: Artifact[] = [
     {
         id: 'a1',
+        hashID: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
         name: 'Interview: Subject 004',
         type: 'interview',
-        status: 'active',
+        media: 'text',
+        access: 'private',
+        status: 'complete',
+        responsibleId: 'r1',
         curation: {
             format: 'Transcript (Markdown)',
             source: 'Field Interview',
@@ -65,9 +69,13 @@ Subject: Yeah. When I'm at home, I work harder because I'm grateful for the flex
     },
     {
         id: 'a2',
+        hashID: '88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589',
         name: 'Observation Notes: Office Floor',
         type: 'observation',
-        status: 'inbox', // Still needs appraisal
+        media: 'text',
+        access: 'private',
+        status: 'pending',
+        responsibleId: 'r2',
         curation: {
             format: 'Field Notes',
             source: 'Researcher',
@@ -290,10 +298,8 @@ export default function App() {
   // Curation Actions
   const handleUpdateArtifact = (id: string, updates: Partial<Artifact>) => {
       setArtifacts(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-      if (updates.status === 'active') {
-          addJournalEntry(`Ingested and preserved artifact: ${id}`, 'auto');
-      } else if (updates.status === 'disposed') {
-          addJournalEntry(`Disposed artifact: ${id}`, 'auto');
+      if (updates.status === 'complete') {
+          addJournalEntry(`Artifact marked as Complete: ${id}`, 'auto');
       } else if (updates.content) {
           addJournalEntry(`Updated content for artifact: ${id}`, 'auto');
       }
@@ -309,9 +315,13 @@ export default function App() {
   const handleCreateArtifact = () => {
       const newArt: Artifact = {
           id: `a-${Date.now()}`,
+          hashID: Math.random().toString(36).substring(2),
           name: `New Import ${Date.now().toString().slice(-4)}`,
           type: 'document',
-          status: 'inbox',
+          media: 'text',
+          access: 'private',
+          status: 'pending',
+          responsibleId: activeResearcherId,
           content: 'Raw content pending appraisal...',
           curation: {
               format: 'Text',
@@ -587,7 +597,7 @@ export default function App() {
                             onChange={(e) => setActiveArtifactId(e.target.value)}
                             className="bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 focus:outline-none"
                         >
-                            {artifacts.filter(a => a.status === 'active').map(a => (
+                            {artifacts.filter(a => a.status === 'complete').map(a => (
                                 <option key={a.id} value={a.id}>{a.name}</option>
                             ))}
                         </select>
@@ -611,13 +621,14 @@ export default function App() {
                         onDeleteArtifact={handleDeleteArtifact}
                         onCreateArtifact={handleCreateArtifact}
                         participants={projectSettings.participants}
+                        researchers={researchTeam.researchers}
                     />
                 </TabsContent>
 
                 {/* 2. TEXT ANALYSIS */}
                 <TabsContent value="analyze" className="flex-1 h-full mt-0 relative data-[state=inactive]:hidden">
                     {/* Content Layers */}
-                    {activeArtifact && activeArtifact.status === 'active' ? (
+                    {activeArtifact && activeArtifact.status === 'complete' ? (
                         <>
                             {layersVisible[LayerType.ARTIFACT] && (
                             <ArtifactView 
@@ -651,7 +662,7 @@ export default function App() {
                     ) : (
                          <div className="flex items-center justify-center h-full text-zinc-500 flex-col gap-2">
                             <FilePlus size={48} className="opacity-20" />
-                            <p>Select an active artifact from the top bar or Ingest more data in the Curation tab.</p>
+                            <p>Select an active (complete) artifact from the top bar or Ingest more data in the Curation tab.</p>
                          </div>
                     )}
                 </TabsContent>

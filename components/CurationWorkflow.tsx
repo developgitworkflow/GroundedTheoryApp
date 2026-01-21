@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Artifact, CurationMetadata, LifecycleStatus, Participant } from '../types';
+import { Artifact, CurationMetadata, TypeOfStatus, Participant, TypeOfMedia, TypeOfAccess, Researcher } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -21,7 +21,13 @@ import {
   Calendar,
   User,
   FileType,
-  Users
+  Users,
+  Video,
+  Mic,
+  Table2,
+  Lock,
+  Globe,
+  Hash
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -30,14 +36,14 @@ interface CurationWorkflowProps {
   onUpdateArtifact: (id: string, updates: Partial<Artifact>) => void;
   onDeleteArtifact: (id: string) => void;
   onCreateArtifact: () => void;
-  participants: Participant[]; // Added participants prop
+  participants: Participant[];
+  researchers: Researcher[];
 }
 
-const COLUMNS: { id: LifecycleStatus; label: string; icon: React.ElementType; color: string }[] = [
-  { id: 'inbox', label: 'Inbox', icon: Inbox, color: 'text-zinc-400' },
-  { id: 'appraisal', label: 'Appraisal', icon: SearchCheck, color: 'text-blue-400' },
-  { id: 'active', label: 'Active', icon: Database, color: 'text-emerald-400' },
-  { id: 'archived', label: 'Archive', icon: Archive, color: 'text-amber-400' },
+const COLUMNS: { id: TypeOfStatus; label: string; icon: React.ElementType; color: string }[] = [
+  { id: 'pending', label: 'Pending (Inbox)', icon: Inbox, color: 'text-zinc-400' },
+  { id: 'in progress', label: 'In Progress (Appraisal)', icon: SearchCheck, color: 'text-blue-400' },
+  { id: 'complete', label: 'Complete (Active)', icon: Database, color: 'text-emerald-400' },
 ];
 
 export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({ 
@@ -45,7 +51,8 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
   onUpdateArtifact, 
   onDeleteArtifact,
   onCreateArtifact,
-  participants
+  participants,
+  researchers
 }) => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
@@ -65,7 +72,7 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, status: LifecycleStatus) => {
+  const handleDrop = (e: React.DragEvent, status: TypeOfStatus) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain');
     setDraggingId(null);
@@ -140,6 +147,7 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
           <CurationSidePanel 
              artifact={activeArtifact}
              participants={participants}
+             researchers={researchers}
              onClose={() => setSelectedArtifactId(null)}
              onUpdate={(updates) => onUpdateArtifact(activeArtifact.id, updates)}
              onDelete={() => {
@@ -161,8 +169,17 @@ const WorkflowCard: React.FC<{
     participant?: Participant;
 }> = ({ artifact, onClick, onDragStart, participant }) => {
     
-    // Check for "Active" validity
-    const isMissingMeta = artifact.status === 'active' && (!artifact.curation.consentObtained || !artifact.curation.format);
+    // Check for "Complete" validity
+    const isMissingMeta = artifact.status === 'complete' && (!artifact.curation.consentObtained || !artifact.curation.format);
+
+    const MediaIcon = () => {
+        switch(artifact.media) {
+            case 'audio': return <Mic size={12} />;
+            case 'video': return <Video size={12} />;
+            case 'dataset': return <Table2 size={12} />;
+            default: return <FileText size={12} />;
+        }
+    }
 
     return (
         <div 
@@ -174,7 +191,11 @@ const WorkflowCard: React.FC<{
             <div className="flex items-start justify-between gap-2">
                  <div className="flex items-center gap-2 text-zinc-400">
                     <GripVertical size={14} className="opacity-0 group-hover:opacity-50 cursor-grab" />
-                    <span className="text-[10px] font-mono text-zinc-500 uppercase">{artifact.type || 'DOC'}</span>
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase flex items-center gap-1">
+                        <MediaIcon />
+                        {artifact.media}
+                    </span>
+                    {artifact.access === 'private' ? <Lock size={10} className="text-amber-500/50" /> : <Globe size={10} className="text-blue-500/50" />}
                  </div>
                  {isMissingMeta && (
                      <div title="Missing Metadata">
@@ -204,10 +225,11 @@ const WorkflowCard: React.FC<{
 const CurationSidePanel: React.FC<{
     artifact: Artifact;
     participants: Participant[];
+    researchers: Researcher[];
     onClose: () => void;
     onUpdate: (updates: Partial<Artifact>) => void;
     onDelete: () => void;
-}> = ({ artifact, participants, onClose, onUpdate, onDelete }) => {
+}> = ({ artifact, participants, researchers, onClose, onUpdate, onDelete }) => {
     const [meta, setMeta] = useState<CurationMetadata>(artifact.curation);
 
     // Sync local state when artifact changes
@@ -224,8 +246,8 @@ const CurationSidePanel: React.FC<{
             {/* Header */}
             <div className="h-14 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-950">
                 <div className="flex items-center gap-2 text-sm text-zinc-500">
-                    <FileText size={16} />
-                    <span>{artifact.id}</span>
+                    <Hash size={16} />
+                    <span className="font-mono text-xs">{artifact.hashID.substring(0, 12)}...</span>
                 </div>
                 <Button variant="ghost" size="icon" onClick={onClose} className="text-zinc-400 hover:text-white">
                     <X size={18} />
@@ -239,7 +261,7 @@ const CurationSidePanel: React.FC<{
                     <div className="flex items-center gap-2">
                         <Badge variant="secondary" className={cn(
                             "capitalize",
-                            artifact.status === 'active' ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-800 text-zinc-400"
+                            artifact.status === 'complete' ? "bg-emerald-500/10 text-emerald-500" : "bg-zinc-800 text-zinc-400"
                         )}>
                             {artifact.status}
                         </Badge>
@@ -250,8 +272,25 @@ const CurationSidePanel: React.FC<{
                 <div className="space-y-4 border border-zinc-800 rounded-lg p-4 bg-zinc-900/20">
                     <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Metadata Properties</h3>
                     
+                    {/* Media Type */}
                     <div className="space-y-1">
-                        <label className="text-[10px] text-zinc-400 flex items-center gap-1"><FileType size={10} /> Type</label>
+                        <label className="text-[10px] text-zinc-400 flex items-center gap-1"><FileType size={10} /> Media Format</label>
+                         <select 
+                            value={artifact.media}
+                            onChange={(e) => onUpdate({ media: e.target.value as TypeOfMedia })}
+                            className="w-full bg-zinc-950 border border-zinc-800 text-sm p-1 rounded text-zinc-300"
+                        >
+                            <option value="text">Text</option>
+                            <option value="video">Video</option>
+                            <option value="audio">Audio</option>
+                            <option value="dataset">Dataset</option>
+                            <option value="software">Software</option>
+                        </select>
+                    </div>
+
+                    {/* Method Type */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-zinc-400 flex items-center gap-1"><FileText size={10} /> Method Type</label>
                          <select 
                             value={artifact.type}
                             onChange={(e) => onUpdate({ type: e.target.value as any })}
@@ -262,6 +301,36 @@ const CurationSidePanel: React.FC<{
                             <option value="observation">Observation</option>
                             <option value="protocol">Protocol</option>
                             <option value="bibliography">Bibliography</option>
+                        </select>
+                    </div>
+
+                    {/* Access Level */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-zinc-400 flex items-center gap-1">
+                            {artifact.access === 'private' ? <Lock size={10}/> : <Globe size={10}/>} Access Level
+                        </label>
+                        <select 
+                            value={artifact.access}
+                            onChange={(e) => onUpdate({ access: e.target.value as TypeOfAccess })}
+                            className="w-full bg-zinc-950 border border-zinc-800 text-sm p-1 rounded text-zinc-300"
+                        >
+                            <option value="private">Private</option>
+                            <option value="public">Public</option>
+                        </select>
+                    </div>
+
+                    {/* Responsible Researcher */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] text-zinc-400 flex items-center gap-1"><User size={10} /> Responsible Researcher</label>
+                        <select 
+                            value={artifact.responsibleId || ''}
+                            onChange={(e) => onUpdate({ responsibleId: e.target.value })}
+                            className="w-full bg-zinc-950 border border-zinc-800 text-sm p-1 rounded text-zinc-300"
+                        >
+                            <option value="">-- Assign Responsibility --</option>
+                            {researchers.map(r => (
+                                <option key={r.id} value={r.id}>{r.name} ({r.role})</option>
+                            ))}
                         </select>
                     </div>
                     
