@@ -9,7 +9,7 @@ import { MemoDirectory } from './components/MemoDirectory';
 import { SettingsDialog } from './components/SettingsDialog'; // New Import
 import { Visualizations } from './components/Visualizations'; // New Import
 import { suggestOntology } from './services/geminiService'; // New Import
-import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher } from './types';
+import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher, Vote, VoteStatus } from './types';
 import { 
   FilePlus, 
   Settings, 
@@ -113,26 +113,43 @@ const INITIAL_TEAM: ResearchTeam = {
     { id: 'r2', name: 'Sarah J.', role: 'Junior', color: '#ec4899', initials: 'SJ' }
   ],
   consensusCriteria: [
-    { id: 'cc1', name: 'Inter-coder Reliability', description: 'At least 2 researchers must code the same segment for core categories.', active: true },
-    { id: 'cc2', name: 'Senior Sign-off', description: 'Senior researcher must approve all axial coding relationships.', active: true }
+    { 
+        id: 'cc1', 
+        name: 'Inter-coder Reliability', 
+        description: 'At least 2 researchers must code the same segment for core categories.', 
+        votingType: 'majority',
+        active: true 
+    },
+    { 
+        id: 'cc2', 
+        name: 'Senior Sign-off', 
+        description: 'Senior researcher must approve all axial coding relationships.', 
+        votingType: 'unanimous',
+        active: true 
+    }
   ]
 };
 
 // --- Recursive Tree Component ---
-const CodeTreeItem = ({ 
-    code, 
-    allCodes, 
-    codings, 
-    depth = 0, 
-    onNodeClick,
-    search 
-}: { 
+
+interface CodeTreeItemProps {
     code: Code; 
     allCodes: Code[]; 
     codings: Coding[]; 
     depth?: number; 
     onNodeClick: (id: string) => void;
     search: string;
+    selectedCodeId?: string | null;
+}
+
+const CodeTreeItem: React.FC<CodeTreeItemProps> = ({ 
+    code, 
+    allCodes, 
+    codings, 
+    depth = 0, 
+    onNodeClick,
+    search,
+    selectedCodeId
 }) => {
     const children = allCodes.filter(c => c.parentId === code.id);
     const [isOpen, setIsOpen] = useState(true);
@@ -149,7 +166,8 @@ const CodeTreeItem = ({
             <div 
                 className={cn(
                     "flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-800 rounded cursor-pointer transition-colors group",
-                    code.isCore && "bg-yellow-950/10 hover:bg-yellow-950/20"
+                    code.isCore && "bg-yellow-950/10 hover:bg-yellow-950/20",
+                    selectedCodeId === code.id && "bg-blue-900/30 border border-blue-800/50"
                 )}
                 style={{ marginLeft: `${depth * 12}px` }}
                 onClick={() => onNodeClick(code.id)}
@@ -163,7 +181,7 @@ const CodeTreeItem = ({
 
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
                 
-                <span className={cn("text-xs font-medium truncate flex-1", code.isCore ? "text-yellow-500" : "text-zinc-300")}>
+                <span className={cn("text-xs font-medium truncate flex-1", code.isCore ? "text-yellow-500" : "text-zinc-300", selectedCodeId === code.id && "text-blue-200")}>
                     {code.name}
                 </span>
 
@@ -184,6 +202,7 @@ const CodeTreeItem = ({
                     depth={depth + 1}
                     onNodeClick={onNodeClick}
                     search={search}
+                    selectedCodeId={selectedCodeId}
                 />
             ))}
         </div>
@@ -208,9 +227,13 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isElaborating, setIsElaborating] = useState(false);
 
-  // Team State
+  // Team & Voting State
   const [researchTeam, setResearchTeam] = useState<ResearchTeam>(INITIAL_TEAM);
   const [activeResearcherId, setActiveResearcherId] = useState<string>(INITIAL_TEAM.researchers[0].id);
+  const [votes, setVotes] = useState<Vote[]>([]); // Initialize empty votes
+
+  // Filter State
+  const [codeFilter, setCodeFilter] = useState<string | null>(null);
 
   const activeResearcher = researchTeam.researchers.find(r => r.id === activeResearcherId) || researchTeam.researchers[0];
   
@@ -250,6 +273,29 @@ export default function App() {
 
   const toggleLayer = (id: LayerType) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+  };
+
+  // Voting Handler
+  const handleVote = (criterionId: string, status: VoteStatus, comment?: string) => {
+      setVotes(prev => {
+          // Remove existing vote for this researcher on this criterion/artifact if exists
+          const filtered = prev.filter(v => 
+              !(v.artifactId === activeArtifactId && v.criterionId === criterionId && v.researcherId === activeResearcherId)
+          );
+          
+          const newVote: Vote = {
+              id: `v-${Date.now()}`,
+              artifactId: activeArtifactId,
+              criterionId,
+              researcherId: activeResearcherId,
+              status,
+              comment,
+              timestamp: new Date().toISOString()
+          };
+          
+          return [...filtered, newVote];
+      });
+      addJournalEntry(`Voted '${status}' on criterion for artifact ${activeArtifactId}`, 'auto');
   };
 
   // Curation Actions
@@ -413,7 +459,10 @@ export default function App() {
   };
 
   const handleNodeClick = (codeId: string) => {
-    console.log("Clicked code:", codeId);
+    setCodeFilter(prev => prev === codeId ? null : codeId);
+    if (activeTab !== 'analyze') {
+        setActiveTab('analyze');
+    }
   };
 
   // Edit Handlers
@@ -576,11 +625,16 @@ export default function App() {
                                 codes={codes} 
                                 memos={memos}
                                 researchTeam={researchTeam} // Pass team info
+                                activeResearcherId={activeResearcherId} // Current user
+                                votes={votes} // Pass votes
+                                onVote={handleVote} // Voting handler
                                 layersVisible={layersVisible}
                                 onAddCoding={handleAddCoding}
                                 onCreateCode={handleCreateCode}
                                 onAddMemo={handleAddMemo}
                                 onEditMemo={openMemoEditor} 
+                                selectedCodeId={codeFilter}
+                                onClearSelection={() => setCodeFilter(null)}
                             />
                             )}
 
@@ -590,6 +644,7 @@ export default function App() {
                                 codings={codings} 
                                 layersVisible={layersVisible} 
                                 onNodeClick={handleNodeClick}
+                                selectedCodeId={codeFilter}
                             />
                         </>
                     ) : (
@@ -668,6 +723,7 @@ export default function App() {
                                                 codings={codings}
                                                 onNodeClick={handleNodeClick}
                                                 search={codeSearchTerm}
+                                                selectedCodeId={codeFilter}
                                             />
                                         ))
                                     ) : (

@@ -8,6 +8,7 @@ interface TheoryGraphProps {
   codings: Coding[];
   layersVisible: Record<LayerType, boolean>;
   onNodeClick: (codeId: string) => void;
+  selectedCodeId?: string | null;
 }
 
 // Extend D3 types using our domain types
@@ -18,7 +19,7 @@ interface D3Link extends d3.SimulationLinkDatum<D3Node> {
   value: number;
 }
 
-export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layersVisible, onNodeClick }) => {
+export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layersVisible, onNodeClick, selectedCodeId }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -91,8 +92,14 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     nodeGroup.append("circle")
       .attr("r", (d) => d.isCore ? 30 : 5 + Math.sqrt(d.val) * 4)
       .attr("fill", (d) => d.color)
-      .attr("stroke", (d) => d.isCore ? "#fff" : "#fff")
-      .attr("stroke-width", (d) => d.isCore ? 3 : 1.5)
+      .attr("stroke", (d) => {
+          if (selectedCodeId === d.id) return "#60a5fa"; // Selected Highlight
+          return d.isCore ? "#fff" : "#fff";
+      })
+      .attr("stroke-width", (d) => {
+          if (selectedCodeId === d.id) return 4;
+          return d.isCore ? 3 : 1.5;
+      })
       .attr("stroke-dasharray", (d) => d.isCore ? "3 2" : "0")
       .attr("cursor", "pointer")
       .attr("filter", (d) => d.isCore ? "drop-shadow(0 0 8px rgba(253, 224, 71, 0.5))" : "")
@@ -115,7 +122,10 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
       .attr("x", (d) => d.isCore ? 0 : 12)
       .attr("y", (d) => d.isCore ? 5 : 4)
       .attr("text-anchor", (d) => d.isCore ? "middle" : "start")
-      .attr("fill", (d) => d.isCore ? "#000" : "#e5e7eb")
+      .attr("fill", (d) => {
+          if (selectedCodeId === d.id) return "#60a5fa";
+          return d.isCore ? "#000" : "#e5e7eb";
+      })
       .attr("font-size", (d) => d.isCore ? "10px" : "12px")
       .attr("font-weight", (d) => d.isCore ? "bold" : "normal")
       .attr("font-family", "sans-serif")
@@ -152,7 +162,7 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     return () => {
       simulation.stop();
     };
-  }, [codes, codings, layersVisible, dimensions]);
+  }, [codes, codings, layersVisible, dimensions, selectedCodeId]);
 
   if (!layersVisible[LayerType.AXIAL_CONNECTIONS]) return null;
 

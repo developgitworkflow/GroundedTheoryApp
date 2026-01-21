@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher } from '../types';
+import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut } from './ui/command';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { ConsensusPanel } from './ConsensusPanel';
 
 interface ArtifactViewProps {
   artifact: Artifact;
@@ -16,6 +17,9 @@ interface ArtifactViewProps {
   codes: Code[];
   memos?: Memo[];
   researchTeam?: ResearchTeam;
+  activeResearcherId?: string;
+  votes?: Vote[];
+  onVote?: (criterionId: string, status: VoteStatus, comment?: string) => void;
   layersVisible: Record<LayerType, boolean>;
   onAddCoding: (coding: Omit<Coding, 'id'>) => void;
   onCreateCode: (name: string) => Promise<Code>;
@@ -23,6 +27,8 @@ interface ArtifactViewProps {
   onEditMemo?: (memo: Memo) => void;
   onUpdateMemo?: (id: string, content: string) => void;
   highlightedMemoId?: string;
+  selectedCodeId?: string | null;
+  onClearSelection?: () => void;
 }
 
 export const ArtifactView: React.FC<ArtifactViewProps> = ({ 
@@ -31,18 +37,24 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   codes, 
   memos = [],
   researchTeam,
+  activeResearcherId,
+  votes,
+  onVote,
   layersVisible,
   onAddCoding,
   onCreateCode,
   onAddMemo,
   onEditMemo,
-  highlightedMemoId
+  highlightedMemoId,
+  selectedCodeId,
+  onClearSelection
 }) => {
   const [selection, setSelection] = useState<{start: number, end: number, text: string, rect: DOMRect} | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestedCodesList, setSuggestedCodesList] = useState<string[]>([]);
   const [memoInput, setMemoInput] = useState('');
   const [showMemoInput, setShowMemoInput] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const memoRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -59,8 +71,14 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   // Filter codings for this artifact
   const activeCodings = useMemo(() => {
     if (!layersVisible[LayerType.OPEN_CODING]) return [];
-    return codings.filter(c => c.artifactId === artifact.id);
-  }, [codings, artifact.id, layersVisible]);
+    let relevant = codings.filter(c => c.artifactId === artifact.id);
+
+    if (selectedCodeId) {
+        relevant = relevant.filter(c => c.codeId === selectedCodeId);
+    }
+    
+    return relevant;
+  }, [codings, artifact.id, layersVisible, selectedCodeId]);
 
   // Split content into paragraphs for the "Document Browser" view
   const paragraphs = useMemo(() => {
@@ -189,6 +207,18 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   return (
     <div className="relative h-full flex flex-col bg-[#1e1e1e]" ref={containerRef}>
         
+        {/* Consensus Panel Toggle Overlay */}
+        {isReviewOpen && researchTeam && activeResearcherId && votes && onVote && (
+            <ConsensusPanel 
+                artifact={artifact}
+                team={researchTeam}
+                activeResearcherId={activeResearcherId}
+                votes={votes}
+                onVote={onVote}
+                onClose={() => setIsReviewOpen(false)}
+            />
+        )}
+
         {/* Helper Toolbar (Floating) for New Selection */}
         {selection && (
             <div 
@@ -311,8 +341,30 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                 
                 {/* Document Header */}
                 <div className="sticky top-0 z-10 bg-[#1e1e1e]/95 backdrop-blur border-b border-zinc-800 px-8 py-3 flex items-center justify-between shadow-sm">
-                    <h2 className="font-semibold text-zinc-200">{artifact.name}</h2>
+                    <div className="flex items-center gap-4">
+                        <h2 className="font-semibold text-zinc-200">{artifact.name}</h2>
+                        {selectedCodeId && (
+                            <Badge variant="secondary" className="bg-blue-900/30 text-blue-200 border-blue-800 gap-2 hover:bg-blue-900/50 pr-1">
+                                <span className="flex items-center gap-1">
+                                    <Tag size={10} />
+                                    Filter: {codes.find(c => c.id === selectedCodeId)?.name}
+                                </span>
+                                <button onClick={onClearSelection} className="hover:text-white p-0.5 rounded-full hover:bg-blue-800">
+                                    <X size={10} />
+                                </button>
+                            </Badge>
+                        )}
+                    </div>
                     <div className="flex items-center gap-4 text-xs text-zinc-500">
+                        <Button 
+                            variant={isReviewOpen ? "brand" : "outline"} 
+                            size="sm" 
+                            className="h-7 text-xs gap-2"
+                            onClick={() => setIsReviewOpen(!isReviewOpen)}
+                        >
+                            <GitPullRequest size={14} /> Review Status
+                        </Button>
+                        <div className="w-px h-4 bg-zinc-700" />
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> {codings.length} Codings</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> {memos.length} Memos</span>
                     </div>

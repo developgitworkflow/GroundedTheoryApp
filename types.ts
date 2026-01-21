@@ -46,11 +46,27 @@ export interface Researcher {
   initials: string;
 }
 
+export type TypeOfVote = 'unanimous' | 'majority' | 'consensus';
+
 export interface ConsensusCriteria {
   id: string;
   name: string;
   description: string;
+  votingType: TypeOfVote;
   active: boolean;
+}
+
+// New Types for Review Process
+export type VoteStatus = 'approved' | 'rejected' | 'abstain';
+
+export interface Vote {
+  id: string;
+  artifactId: string;
+  criterionId: string; // Which rule are we voting on?
+  researcherId: string;
+  status: VoteStatus;
+  comment?: string;
+  timestamp: string;
 }
 
 export interface ResearchTeam {

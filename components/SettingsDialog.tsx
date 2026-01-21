@@ -83,6 +83,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           id: `cc-${Date.now()}`,
           name: 'New Criteria',
           description: '',
+          votingType: 'consensus',
           active: true
       };
       setLocalTeam(prev => ({ ...prev, consensusCriteria: [...prev.consensusCriteria, newCrit] }));
@@ -271,18 +272,32 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                          <Input 
                                             value={c.name}
                                             onChange={(e) => updateCriteria(c.id, { name: e.target.value })}
-                                            className="h-8 flex-1 bg-transparent border-none focus:ring-0 font-medium px-0"
+                                            className="h-8 flex-1 bg-transparent border-none focus:ring-0 font-medium px-0 text-sm"
                                             placeholder="Rule Name..."
                                          />
                                          <div className="flex items-center gap-2">
-                                             <label className="text-[10px] text-zinc-500 uppercase font-bold">Active</label>
-                                             <input 
-                                                type="checkbox" 
-                                                checked={c.active} 
-                                                onChange={(e) => updateCriteria(c.id, { active: e.target.checked })}
-                                                className="accent-emerald-500"
-                                             />
-                                             <Button size="icon" variant="ghost" onClick={() => removeCriteria(c.id)} className="h-6 w-6 text-zinc-600 hover:text-red-500 ml-2">
+                                             <select
+                                                value={c.votingType}
+                                                onChange={(e) => updateCriteria(c.id, { votingType: e.target.value as any })}
+                                                className="h-6 text-[10px] uppercase font-bold bg-zinc-950 border border-zinc-800 rounded px-1 text-zinc-400 focus:outline-none"
+                                             >
+                                                <option value="unanimous">Unanimous</option>
+                                                <option value="majority">Majority</option>
+                                                <option value="consensus">Consensus</option>
+                                             </select>
+                                             
+                                             <div className="w-px h-4 bg-zinc-800 mx-1"></div>
+
+                                             <label className="text-[10px] text-zinc-500 uppercase font-bold cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={c.active} 
+                                                    onChange={(e) => updateCriteria(c.id, { active: e.target.checked })}
+                                                    className="mr-1 accent-emerald-500"
+                                                />
+                                                Active
+                                             </label>
+                                             <Button size="icon" variant="ghost" onClick={() => removeCriteria(c.id)} className="h-6 w-6 text-zinc-600 hover:text-red-500 ml-1">
                                                  <X size={14} />
                                              </Button>
                                          </div>
