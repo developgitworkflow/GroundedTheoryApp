@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool } from '../types';
+import { downloadBibFile } from '../lib/bibUtils';
 import { 
   Settings, 
   User, 
@@ -22,7 +23,9 @@ import {
   Wrench,
   Book,
   Microscope,
-  PersonStanding
+  PersonStanding,
+  Upload,
+  Download
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -49,6 +52,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [localSettings, setLocalSettings] = useState<ProjectSettings>(settings);
   const [localTeam, setLocalTeam] = useState<ResearchTeam>(team || { id: 'default', researchers: [], consensusCriteria: [] });
   const [activeTab, setActiveTab] = useState('general');
+  const bibFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -154,6 +158,30 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       }));
   };
 
+  const handleBibImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      try {
+          const text = await file.text();
+          setLocalSettings(prev => ({
+              ...prev,
+              theoreticalFramework: {
+                  ...prev.theoreticalFramework,
+                  bibliographyContent: text 
+              }
+          }));
+      } catch (err) {
+          console.error("Failed to read .bib file", err);
+          alert("Error reading file");
+      }
+      
+      if (bibFileInputRef.current) bibFileInputRef.current.value = '';
+  };
+
+  const handleBibExport = () => {
+      downloadBibFile(localSettings.theoreticalFramework.bibliographyContent, `${localSettings.projectName.replace(/\s+/g, '_')}_refs`);
+  };
 
   // --- Team Management Handlers ---
   const addResearcher = () => {
@@ -208,6 +236,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <input 
+        type="file" 
+        ref={bibFileInputRef} 
+        onChange={handleBibImport} 
+        accept=".bib,.txt" 
+        className="hidden" 
+      />
+      
       <div className="w-[900px] h-[700px] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
         {/* Header */}
@@ -500,7 +536,18 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                         {/* Bibliography */}
                         <div>
-                            <SectionHeader title="Bibliography" description="Literature references." />
+                            <div className="flex justify-between items-start mb-4">
+                                <SectionHeader title="Bibliography" description="Literature references (BibTeX format supported)." />
+                                <div className="flex gap-2">
+                                    <Button size="xs" variant="outline" onClick={() => bibFileInputRef.current?.click()} className="gap-2">
+                                        <Upload size={14}/> Import .bib
+                                    </Button>
+                                    <Button size="xs" variant="outline" onClick={handleBibExport} className="gap-2">
+                                        <Download size={14}/> Export .bib
+                                    </Button>
+                                </div>
+                            </div>
+                            
                             <div className="flex gap-3 items-start">
                                 <Book size={20} className="text-zinc-500 mt-2" />
                                 <Textarea 
@@ -510,7 +557,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                         theoreticalFramework: { ...localSettings.theoreticalFramework, bibliographyContent: e.target.value }
                                     })}
                                     className="min-h-[200px] font-mono text-sm bg-zinc-900"
-                                    placeholder="Paste bibliography here..."
+                                    placeholder="Paste BibTeX entries here or import a .bib file..."
                                 />
                             </div>
                         </div>
