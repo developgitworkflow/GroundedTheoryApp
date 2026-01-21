@@ -433,18 +433,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 <SectionHeader title="Research Questions" description="The questions guiding the inquiry." />
                                 <Button size="xs" variant="outline" onClick={addRQ} className="gap-2"><Plus size={14}/> Add RQ</Button>
                              </div>
-                             <div className="space-y-2">
+                             <div className="space-y-3">
                                 {localSettings.theoreticalFramework.researchQuestions.map(rq => (
-                                    <div key={rq.id} className="flex gap-2">
-                                        <div className="p-2 bg-zinc-900 rounded border border-zinc-800 text-zinc-500">
+                                    <div key={rq.id} className="flex gap-3 items-start bg-zinc-900/30 p-3 rounded-lg border border-zinc-800">
+                                        <div className="p-2 bg-zinc-900 rounded border border-zinc-800 text-zinc-500 mt-1" title={`ID: ${rq.id}`}>
                                             <FileQuestion size={16} />
                                         </div>
-                                        <Input 
-                                            value={rq.content}
-                                            onChange={(e) => updateRQ(rq.id, e.target.value)}
-                                            className="flex-1 bg-zinc-900/50"
-                                        />
-                                        <Button size="icon" variant="ghost" onClick={() => removeRQ(rq.id)} className="text-zinc-600 hover:text-red-500">
+                                        <div className="flex-1 space-y-1">
+                                            <div className="text-[10px] text-zinc-500 font-mono">ID: {rq.id}</div>
+                                            <Input 
+                                                value={rq.content}
+                                                onChange={(e) => updateRQ(rq.id, e.target.value)}
+                                                className="bg-zinc-950"
+                                                placeholder="Enter research question content..."
+                                            />
+                                        </div>
+                                        <Button size="icon" variant="ghost" onClick={() => removeRQ(rq.id)} className="text-zinc-600 hover:text-red-500 mt-1">
                                             <Trash2 size={14} />
                                         </Button>
                                     </div>

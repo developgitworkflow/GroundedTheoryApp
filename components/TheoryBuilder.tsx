@@ -1,40 +1,93 @@
-
-import React, { useState } from 'react';
-import { Code, Memo, Theory, ResearchQuestion } from '../types';
-import { Crown, Sparkles, AlertCircle, ArrowRight, BookOpen, Layers, Layout, Grid } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact } from '../types';
+import { 
+    Crown, 
+    Sparkles, 
+    AlertCircle, 
+    ArrowRight, 
+    BookOpen, 
+    Layout, 
+    Search, 
+    Folder, 
+    Tag, 
+    FileText, 
+    Quote, 
+    ChevronRight, 
+    ChevronDown, 
+    StickyNote,
+    Lightbulb,
+    Plus
+} from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 import { TheoryDashboard } from './TheoryDashboard';
 
 interface TheoryBuilderProps {
   codes: Code[];
+  codings: Coding[];
+  artifacts: Artifact[];
   memos: Memo[];
   researchQuestions: ResearchQuestion[];
   onSetCoreCategory: (codeId: string) => void;
   onAddMemo: (title: string, content: string) => void;
   onUpdateMemo: (id: string, updates: Partial<Memo>) => void;
-  theoryArtefact: Theory; // Pass the Theory object
+  onCreateCode: (name: string, kind: 'code' | 'category') => void;
+  theoryArtefact: Theory; 
 }
 
 export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({ 
     codes, 
+    codings,
+    artifacts,
     memos, 
     researchQuestions,
     onSetCoreCategory, 
     onAddMemo, 
     onUpdateMemo,
+    onCreateCode,
     theoryArtefact 
 }) => {
   const [selectedCoreId, setSelectedCoreId] = useState<string>(codes.find(c => c.isCore)?.id || '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeView, setActiveView] = useState('narrative');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [dirSearch, setDirSearch] = useState('');
 
   const coreCode = codes.find(c => c.id === selectedCoreId);
   const categories = codes.filter(c => c.kind === 'category');
+
+  // Directory Filtering
+  const filteredCategories = useMemo(() => {
+      if (!dirSearch) return categories;
+      return categories.filter(c => c.name.toLowerCase().includes(dirSearch.toLowerCase()));
+  }, [categories, dirSearch]);
+
+  // Derived Data for Selected Category
+  const activeCategoryData = useMemo(() => {
+      if (!selectedCategoryId) return null;
+      const category = codes.find(c => c.id === selectedCategoryId);
+      if (!category) return null;
+
+      // Children codes
+      const childCodes = codes.filter(c => c.parentId === category.id);
+      const allRelatedCodeIds = [category.id, ...childCodes.map(c => c.id)];
+
+      // Linked Evidence (Codings)
+      const relatedCodings = codings.filter(c => allRelatedCodeIds.includes(c.codeId));
+      
+      // Linked Memos
+      const relatedMemos = memos.filter(m => 
+          m.relatedIds.some(id => allRelatedCodeIds.includes(id)) || 
+          m.content.toLowerCase().includes(category.name.toLowerCase())
+      );
+
+      return { category, childCodes, relatedCodings, relatedMemos };
+  }, [selectedCategoryId, codes, codings, memos]);
 
   const handleCoreChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newId = e.target.value;
@@ -56,14 +109,23 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     const generated = await generateTheoreticalMemo([coreCode.name], context);
     if (generated) {
         onAddMemo(`Story Line: ${coreCode.name}`, generated);
+        // Also append to main content for flow
+        // onUpdateTheoryContent(theoryArtefact.content + "\n\n" + generated); // If we had that handler
     }
     setIsGenerating(false);
   };
 
+  const handleCreateCategory = () => {
+      const name = prompt("Enter new Category name:");
+      if (name) {
+          onCreateCode(name, 'category');
+      }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-zinc-900/30 overflow-hidden">
+    <div className="flex flex-col h-full bg-zinc-950 overflow-hidden">
         {/* Sub-Navigation for Theory Area */}
-        <div className="border-b border-zinc-800 bg-zinc-950 px-6 py-2 shrink-0 flex justify-between items-center">
+        <div className="border-b border-zinc-800 bg-zinc-950 px-6 py-2 shrink-0 flex justify-between items-center h-14">
              <div className="flex items-center gap-4">
                 <Tabs value={activeView} onValueChange={setActiveView}>
                     <TabsList className="bg-zinc-900 border border-zinc-800">
@@ -82,140 +144,216 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
             </Badge>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-hidden relative">
             
-            {/* VIEW 1: NARRATIVE BUILDER (Original) */}
+            {/* VIEW 1: NARRATIVE BUILDER (3-Pane Layout) */}
             {activeView === 'narrative' && (
-                <div className="max-w-5xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <div className="flex flex-col gap-2">
-                        <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">The Emerging Theory</h1>
-                        <p className="text-zinc-400 text-lg max-w-2xl">
-                            Structuring the relationships between conceptual categories.
-                        </p>
+                <div className="flex h-full w-full animate-in fade-in duration-300">
+                    
+                    {/* LEFT PANE: Concept Directory */}
+                    <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col">
+                        <div className="p-3 border-b border-zinc-800 bg-zinc-950 flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-2 top-2.5 text-zinc-500" size={12} />
+                                <Input 
+                                    className="pl-7 h-8 bg-zinc-900 border-zinc-800 text-xs" 
+                                    placeholder="Filter categories..." 
+                                    value={dirSearch}
+                                    onChange={(e) => setDirSearch(e.target.value)}
+                                />
+                            </div>
+                            <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                                onClick={handleCreateCategory}
+                                title="Create New Category"
+                            >
+                                <Plus size={14} />
+                            </Button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2">
+                            <div className="mb-2 px-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Structural Categories</div>
+                            <div className="space-y-0.5">
+                                {filteredCategories.map(cat => {
+                                    const isSelected = selectedCategoryId === cat.id;
+                                    return (
+                                        <div 
+                                            key={cat.id}
+                                            onClick={() => setSelectedCategoryId(cat.id)}
+                                            className={cn(
+                                                "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors text-sm",
+                                                isSelected ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-300"
+                                            )}
+                                        >
+                                            <Folder size={14} className={cn(isSelected ? "fill-zinc-100" : "fill-zinc-800")} style={{ color: cat.color }} />
+                                            <span className="flex-1 truncate font-medium">{cat.name}</span>
+                                            {cat.isCore && <Crown size={10} className="text-yellow-500" />}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        {/* Legend / Status Footer */}
+                        <div className="p-2 border-t border-zinc-800 text-[10px] text-zinc-600 flex justify-between bg-zinc-950/50">
+                            <span>{categories.length} Categories</span>
+                            <span>{codes.filter(c => c.kind === 'code').length} Codes</span>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Left Column: Theory Structure (List of Categories) */}
-                        <div className="space-y-6">
-                            <Card className="border-zinc-800 bg-zinc-950/50 h-full">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm font-bold uppercase text-zinc-400 flex items-center gap-2">
-                                        <Layers size={14} /> Structural Categories
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                    {categories.length === 0 && (
-                                        <p className="text-xs text-zinc-600 italic">No categories defined yet. Promote codes to categories in the Ontology view.</p>
-                                    )}
-                                    {categories.map(cat => (
-                                        <div key={cat.id} className="flex items-center justify-between p-2 rounded bg-zinc-900 border border-zinc-800">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                                                <span className={cn("text-sm font-medium", cat.isCore ? "text-yellow-500" : "text-zinc-300")}>
-                                                    {cat.name}
-                                                </span>
-                                            </div>
-                                            {cat.isCore && <Crown size={12} className="text-yellow-500" />}
-                                        </div>
-                                    ))}
-                                </CardContent>
-                            </Card>
+                    {/* MIDDLE PANE: The Narrative */}
+                    <div className="flex-1 bg-zinc-900/30 flex flex-col min-w-0">
+                        {/* Toolbar / Core Selector */}
+                        <div className="p-4 border-b border-zinc-800 flex flex-col gap-4 bg-zinc-950/30">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold uppercase text-zinc-500 whitespace-nowrap flex items-center gap-1">
+                                    <Crown size={12} className="text-yellow-500" /> Core Category:
+                                </span>
+                                <div className="relative flex-1 max-w-md">
+                                    <select 
+                                        value={selectedCoreId}
+                                        onChange={handleCoreChange}
+                                        className="w-full bg-zinc-900 border border-zinc-700 text-zinc-200 rounded px-2 py-1.5 text-sm focus:ring-1 focus:ring-blue-600 outline-none appearance-none"
+                                    >
+                                        <option value="">-- Select Central Phenomenon --</option>
+                                        {codes.map(code => (
+                                            <option key={code.id} value={code.id}>
+                                                {code.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-2.5 text-zinc-500 pointer-events-none" size={12} />
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="gap-2 text-xs border-zinc-700 ml-auto"
+                                    disabled={!coreCode || isGenerating}
+                                    onClick={handleGenerateStory}
+                                >
+                                    {isGenerating ? <Sparkles className="animate-spin text-purple-400" size={12}/> : <Sparkles className="text-purple-400" size={12}/>}
+                                    AI Assist
+                                </Button>
+                            </div>
                         </div>
 
-                        {/* Middle/Right: Content & Core Category */}
-                        <div className="lg:col-span-2 space-y-6">
-                            {/* Core Category Selector */}
-                            <Card className="border-zinc-800 bg-zinc-950/50">
-                                <CardHeader>
-                                    <CardTitle className="text-sm font-bold uppercase text-zinc-400 flex items-center gap-2">
-                                        <Crown size={14} className="text-yellow-500"/> Core Category
-                                    </CardTitle>
-                                    <CardDescription>Select the central phenomenon that integrates the categories below.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex flex-col md:flex-row gap-4 items-center">
-                                        <div className="relative w-full">
-                                            <select 
-                                                value={selectedCoreId}
-                                                onChange={handleCoreChange}
-                                                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 rounded-md px-4 py-3 text-base focus:ring-2 focus:ring-blue-600 focus:outline-none appearance-none transition-all hover:border-zinc-600"
-                                            >
-                                                <option value="">-- Choose the central phenomenon --</option>
-                                                {codes.map(code => (
-                                                    <option key={code.id} value={code.id}>
-                                                        {code.name} {code.kind === 'category' ? '(Category)' : '(Code)'}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-400">
-                                                <ArrowRight size={14} className="rotate-90" />
-                                            </div>
+                        {/* Editor Area */}
+                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div className="max-w-3xl mx-auto space-y-4">
+                                <div className="text-center mb-8">
+                                    <h1 className="text-2xl font-serif text-zinc-200 mb-2">
+                                        {theoryArtefact.content ? "The Emerging Theory" : "Drafting the Theory"}
+                                    </h1>
+                                    <p className="text-zinc-500 text-sm italic">
+                                        Synthesize the relationships between the core category and sub-categories.
+                                    </p>
+                                </div>
+                                
+                                {theoryArtefact.content ? (
+                                    <div className="prose prose-invert prose-zinc max-w-none">
+                                        {/* In a real app, this would be a TipTap or Slate editor. Using text display for now. */}
+                                        <div className="whitespace-pre-wrap leading-relaxed text-zinc-300 text-base font-serif">
+                                            {theoryArtefact.content}
                                         </div>
                                     </div>
-                                </CardContent>
-                                {coreCode && (
-                                    <CardFooter className="bg-zinc-900/30 border-t border-zinc-800/50 flex flex-col items-start gap-4 py-6">
-                                        <Button 
-                                            onClick={handleGenerateStory}
-                                            disabled={isGenerating}
-                                            variant="brand"
-                                            className="w-full sm:w-auto"
-                                        >
-                                            {isGenerating ? <Sparkles className="animate-spin mr-2" size={16} /> : <Sparkles className="mr-2" size={16} />}
-                                            {isGenerating ? 'Synthesizing...' : 'Generate Story Line'}
-                                        </Button>
-                                    </CardFooter>
+                                ) : (
+                                    <div className="border-2 border-dashed border-zinc-800 rounded-xl p-12 text-center flex flex-col items-center justify-center gap-4 text-zinc-600">
+                                        <BookOpen size={32} className="opacity-20" />
+                                        <p>No narrative content yet. Select a core category and use AI Assist or write manually.</p>
+                                    </div>
                                 )}
-                            </Card>
-
-                            {/* Theory Content (TypeOfDocument) */}
-                            <Card className="border-zinc-800 overflow-hidden min-h-[300px]">
-                                <CardHeader className="bg-gradient-to-r from-zinc-950 to-zinc-900 border-b border-zinc-800/50">
-                                    <CardTitle className="text-base flex items-center gap-2 text-purple-400">
-                                        <BookOpen size={16} /> Theory Content
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-6">
-                                    {theoryArtefact.content ? (
-                                        <div className="prose prose-invert prose-sm leading-relaxed text-zinc-300">
-                                            <p>{theoryArtefact.content}</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center py-12 text-zinc-600 gap-2">
-                                            <Sparkles size={24} className="opacity-20" />
-                                            <p className="italic text-sm">Select a core category and generate a story line to populate the theory content.</p>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Memos List */}
-                    <div className="pt-8 border-t border-zinc-800">
-                        <h3 className="text-sm font-bold uppercase text-zinc-500 mb-4 flex items-center gap-2">
-                            <AlertCircle size={14} /> Theoretical Memos
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {memos.length === 0 && <p className="text-zinc-600 text-sm italic">No theoretical memos recorded yet.</p>}
-                            {memos.map(memo => (
-                                <div key={memo.id} className="group bg-zinc-900/50 p-4 rounded-lg border border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/50 transition-all cursor-pointer">
-                                    <h4 className="font-semibold text-zinc-200 text-sm mb-2">{memo.title}</h4>
-                                    <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed">{memo.content}</p>
-                                    <div className="mt-3 flex items-center justify-between">
-                                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-normal text-zinc-500 uppercase">{memo.type}</Badge>
-                                            <span className="text-[10px] text-zinc-600">{new Date(memo.createdAt).toLocaleDateString()}</span>
+                    {/* RIGHT PANE: Context Inspector */}
+                    <div className="w-80 bg-zinc-950 border-l border-zinc-800 flex flex-col">
+                        {activeCategoryData ? (
+                            <>
+                                <div className="p-4 border-b border-zinc-800 bg-zinc-900/10">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: activeCategoryData.category.color }} />
+                                        <h2 className="font-bold text-zinc-100">{activeCategoryData.category.name}</h2>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 leading-snug">
+                                        {activeCategoryData.category.description || "No description provided."}
+                                    </p>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                                    {/* Related Codes */}
+                                    <div>
+                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Tag size={12}/> Child Codes
+                                        </h3>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {activeCategoryData.childCodes.length > 0 ? activeCategoryData.childCodes.map(c => (
+                                                <React.Fragment key={c.id}>
+                                                    <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-normal">
+                                                        {c.name}
+                                                    </Badge>
+                                                </React.Fragment>
+                                            )) : (
+                                                <span className="text-zinc-600 text-xs italic">No child codes.</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Memos */}
+                                    <div>
+                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <StickyNote size={12}/> Related Memos ({activeCategoryData.relatedMemos.length})
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {activeCategoryData.relatedMemos.length > 0 ? activeCategoryData.relatedMemos.slice(0, 3).map(m => (
+                                                <Card key={m.id} className="bg-zinc-900 border-zinc-800 p-3">
+                                                    <div className="font-semibold text-xs text-zinc-300 mb-1">{m.title}</div>
+                                                    <div className="text-[10px] text-zinc-500 line-clamp-3">{m.content}</div>
+                                                </Card>
+                                            )) : (
+                                                <span className="text-zinc-600 text-xs italic">No linked memos.</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Evidence / Quotes */}
+                                    <div>
+                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Quote size={12}/> Grounded Evidence ({activeCategoryData.relatedCodings.length})
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {activeCategoryData.relatedCodings.length > 0 ? activeCategoryData.relatedCodings.slice(0, 5).map(coding => {
+                                                const sourceArt = artifacts.find(a => a.id === coding.artifactId);
+                                                return (
+                                                    <div key={coding.id} className="border-l-2 border-zinc-800 pl-3 py-1">
+                                                        <p className="text-xs text-zinc-300 italic mb-1">"{coding.textSnippet}"</p>
+                                                        <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                                                            <FileText size={8} /> 
+                                                            {sourceArt ? sourceArt.name : 'Unknown Source'}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            }) : (
+                                                <span className="text-zinc-600 text-xs italic">No direct codings found.</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-zinc-600 p-8 text-center gap-2">
+                                <Layout size={32} className="opacity-20" />
+                                <p className="text-sm font-medium">Concept Inspector</p>
+                                <p className="text-xs">Select a category from the directory to view its definition, memos, and grounding evidence.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
             {/* VIEW 2: INTEGRATION DASHBOARD */}
             {activeView === 'dashboard' && (
-                <div className="h-full w-full animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="h-full w-full animate-in fade-in slide-in-from-right-4 duration-300 p-8 overflow-y-auto">
                     <TheoryDashboard 
                         researchQuestions={researchQuestions}
                         memos={memos}

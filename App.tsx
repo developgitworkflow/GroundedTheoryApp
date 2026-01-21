@@ -675,12 +675,15 @@ export default function App() {
                 <TabsContent value="memos" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
                     <TheoryBuilder 
                         codes={codes}
+                        codings={codings} 
+                        artifacts={artifacts} 
                         memos={memos.filter(m => m.type === 'theoretical' || m.type === 'finding')}
                         researchQuestions={projectSettings.theoreticalFramework.researchQuestions}
                         onSetCoreCategory={handleSetCoreCategory}
                         onAddMemo={handleAddTheoryMemo}
                         onUpdateMemo={handleUpdateMemo}
                         theoryArtefact={theoryArtefact}
+                        onCreateCode={handleCreateCode}
                     />
                 </TabsContent>
 
