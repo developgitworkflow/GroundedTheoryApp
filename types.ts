@@ -1,4 +1,5 @@
 
+
 export interface Project {
   id: string;
   name: string;
@@ -48,6 +49,7 @@ export interface Memo {
   relatedIds: string[]; // Can relate to Artifact, Code, or Coding
   createdAt: string;
   type: 'theoretical' | 'procedural' | 'observational';
+  number: number; // Added sequence number for reference
   segment?: {
     start: number;
     end: number;

@@ -8,6 +8,7 @@ import { CurationWorkflow } from './components/CurationWorkflow';
 import { MemoDirectory } from './components/MemoDirectory'; 
 import { SettingsDialog } from './components/SettingsDialog'; // New Import
 import { Visualizations } from './components/Visualizations'; // New Import
+import { suggestOntology } from './services/geminiService'; // New Import
 import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings } from './types';
 import { 
   FilePlus, 
@@ -19,7 +20,11 @@ import {
   BookMarked,
   StickyNote,
   X,
-  Tag
+  Tag,
+  GitMerge,
+  ChevronRight,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 
 // Design System Components
@@ -95,6 +100,77 @@ const INITIAL_SETTINGS: ProjectSettings = {
   stopWords: ["the", "and", "is", "of", "to", "in", "it", "that", "was"]
 };
 
+// --- Recursive Tree Component ---
+const CodeTreeItem = ({ 
+    code, 
+    allCodes, 
+    codings, 
+    depth = 0, 
+    onNodeClick,
+    search 
+}: { 
+    code: Code; 
+    allCodes: Code[]; 
+    codings: Coding[]; 
+    depth?: number; 
+    onNodeClick: (id: string) => void;
+    search: string;
+}) => {
+    const children = allCodes.filter(c => c.parentId === code.id);
+    const [isOpen, setIsOpen] = useState(true);
+    const usageCount = codings.filter(c => c.codeId === code.id).length;
+    
+    // Simple filter check
+    const matches = code.name.toLowerCase().includes(search.toLowerCase());
+    const childMatches = children.some(c => c.name.toLowerCase().includes(search.toLowerCase()));
+
+    if (search && !matches && !childMatches) return null;
+
+    return (
+        <div className="select-none">
+            <div 
+                className={cn(
+                    "flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-800 rounded cursor-pointer transition-colors group",
+                    code.isCore && "bg-yellow-950/10 hover:bg-yellow-950/20"
+                )}
+                style={{ marginLeft: `${depth * 12}px` }}
+                onClick={() => onNodeClick(code.id)}
+            >
+                <div 
+                    onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+                    className={cn("p-0.5 rounded hover:bg-zinc-700 text-zinc-500", children.length === 0 && "opacity-0 pointer-events-none")}
+                >
+                    {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </div>
+
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
+                
+                <span className={cn("text-xs font-medium truncate flex-1", code.isCore ? "text-yellow-500" : "text-zinc-300")}>
+                    {code.name}
+                </span>
+
+                {code.isCore && <span className="text-[8px] text-yellow-600">★</span>}
+                
+                <span className="text-[9px] text-zinc-600 font-mono w-5 text-right">
+                    {usageCount}
+                </span>
+            </div>
+            
+            {isOpen && children.map(child => (
+                <CodeTreeItem 
+                    key={child.id} 
+                    code={child} 
+                    allCodes={allCodes} 
+                    codings={codings} 
+                    depth={depth + 1}
+                    onNodeClick={onNodeClick}
+                    search={search}
+                />
+            ))}
+        </div>
+    );
+};
+
 export default function App() {
   const [layers, setLayers] = useState<LayerConfig[]>(INITIAL_LAYERS);
   const [artifacts, setArtifacts] = useState<Artifact[]>(INITIAL_ARTIFACTS);
@@ -111,6 +187,7 @@ export default function App() {
   // Settings State
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(INITIAL_SETTINGS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isElaborating, setIsElaborating] = useState(false);
 
   // Global Edit State
   const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
@@ -123,9 +200,8 @@ export default function App() {
     return acc;
   }, {} as Record<LayerType, boolean>);
   
-  const filteredCodes = codes.filter(c => 
-    c.name.toLowerCase().includes(codeSearchTerm.toLowerCase())
-  );
+  // Filter for top-level codes (or all if flattening for search)
+  const rootCodes = codes.filter(c => !c.parentId);
 
   // Helper to add log
   const addJournalEntry = (content: string, type: 'auto' | 'manual' = 'manual') => {
@@ -204,6 +280,42 @@ export default function App() {
     return newCode;
   };
 
+  // Ontology Builder
+  const handleElaborateOntology = async () => {
+      setIsElaborating(true);
+      const suggestions = await suggestOntology(codes);
+      
+      let newCodes = [...codes];
+      let updates = 0;
+
+      suggestions.forEach(group => {
+          // Find or create parent
+          let parentCode = newCodes.find(c => c.name.toLowerCase() === group.parent.toLowerCase());
+          if (!parentCode) {
+              parentCode = {
+                  id: `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  name: group.parent,
+                  color: '#ffffff', // Category placeholder color
+                  description: 'AI Generated Category',
+              };
+              newCodes.push(parentCode);
+          }
+
+          // Link children
+          group.children.forEach(childName => {
+              const childCodeIndex = newCodes.findIndex(c => c.name.toLowerCase() === childName.toLowerCase());
+              if (childCodeIndex !== -1) {
+                  newCodes[childCodeIndex] = { ...newCodes[childCodeIndex], parentId: parentCode!.id };
+                  updates++;
+              }
+          });
+      });
+
+      setCodes(newCodes);
+      addJournalEntry(`AI Elaborated Ontology: Organized ${updates} codes into ${suggestions.length} categories.`, 'auto');
+      setIsElaborating(false);
+  };
+
   const handleAddMemo = (snippet: string, content: string, range?: { start: number, end: number }) => {
       const newMemo: Memo = {
           id: `memo-${Date.now()}`,
@@ -212,10 +324,11 @@ export default function App() {
           relatedIds: [activeArtifact.id],
           createdAt: new Date().toISOString(),
           type: 'observational',
-          segment: range ? { start: range.start, end: range.end, text: snippet } : undefined
+          segment: range ? { start: range.start, end: range.end, text: snippet } : undefined,
+          number: memos.length + 1
       };
       setMemos(prev => [...prev, newMemo]);
-      addJournalEntry(`Added observational memo on "${newMemo.title}"`, 'auto');
+      addJournalEntry(`Added observational memo #${newMemo.number}`, 'auto');
       
       // Auto-enable Memos layer if not visible
       if (!layersVisible[LayerType.THEORY_MEMOS]) {
@@ -235,7 +348,8 @@ export default function App() {
           content,
           relatedIds: [],
           createdAt: new Date().toISOString(),
-          type: 'theoretical'
+          type: 'theoretical',
+          number: memos.length + 1
       };
       setMemos(prev => [...prev, newMemo]);
       addJournalEntry(`Generated theoretical story line: ${title}`, 'auto');
@@ -421,15 +535,15 @@ export default function App() {
                     <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col">
                         <div className="flex items-center justify-center p-2 bg-zinc-950 border-b border-zinc-800">
                              <TabsList className="bg-zinc-900 grid grid-cols-2 w-full">
-                                <TabsTrigger value="codes" className="text-xs gap-2"><Tag size={12}/> Codes</TabsTrigger>
+                                <TabsTrigger value="codes" className="text-xs gap-2"><Tag size={12}/> Ontology</TabsTrigger>
                                 <TabsTrigger value="memos" className="text-xs gap-2"><StickyNote size={12}/> Directory</TabsTrigger>
                              </TabsList>
                         </div>
 
-                        {/* TAB 1: CODEBOOK */}
+                        {/* TAB 1: CODEBOOK (ONTOLOGY) */}
                         <TabsContent value="codes" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
                              <div className="p-3 border-b border-zinc-800">
-                                <div className="relative">
+                                <div className="relative mb-2">
                                     <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
                                     <Input 
                                         className="pl-8 h-9 bg-zinc-950 border-zinc-800" 
@@ -438,36 +552,33 @@ export default function App() {
                                         onChange={(e) => setCodeSearchTerm(e.target.value)}
                                     />
                                 </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="w-full text-xs gap-2 bg-zinc-900/50 hover:bg-indigo-900/20 hover:text-indigo-400 hover:border-indigo-800 border-zinc-700"
+                                    onClick={handleElaborateOntology}
+                                    disabled={isElaborating}
+                                >
+                                    {isElaborating ? <Loader2 size={12} className="animate-spin" /> : <GitMerge size={12} />}
+                                    {isElaborating ? 'Analyzing Relations...' : 'Elaborate Ontology (AI)'}
+                                </Button>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                <div className="flex flex-wrap gap-2 content-start">
-                                    {filteredCodes.map(code => (
-                                        <Badge 
-                                            key={code.id}
-                                            variant="outline"
-                                            className={cn(
-                                                "pl-2 pr-2.5 py-1 gap-1.5 cursor-pointer transition-all hover:bg-zinc-800",
-                                                code.isCore ? "ring-1 ring-yellow-500/50" : "border-zinc-800"
-                                            )}
-                                            style={{ 
-                                                borderColor: code.isCore ? undefined : `${code.color}40`,
-                                                backgroundColor: `${code.color}10`,
-                                                color: '#e4e4e7' // zinc-200
-                                            }}
-                                            onClick={() => handleNodeClick(code.id)}
-                                        >
-                                            <div className="w-1.5 h-1.5 rounded-full shadow-[0_0_4px_currentColor]" style={{ backgroundColor: code.color, color: code.color }} />
-                                            <span className="font-medium text-xs">{code.name}</span>
-                                            {code.isCore && <span className="text-[8px] text-yellow-500 ml-1">★</span>}
-                                            <span className="ml-0.5 text-[9px] opacity-50 font-mono">
-                                                {codings.filter(c => c.codeId === code.id).length}
-                                            </span>
-                                        </Badge>
-                                    ))}
-                                    
-                                    {filteredCodes.length === 0 && (
-                                        <div className="w-full text-center py-8 text-zinc-500 text-xs">
-                                            No codes found matching "{codeSearchTerm}".
+                            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+                                <div className="flex flex-col">
+                                    {rootCodes.length > 0 ? (
+                                        rootCodes.map(code => (
+                                            <CodeTreeItem 
+                                                key={code.id}
+                                                code={code}
+                                                allCodes={codes}
+                                                codings={codings}
+                                                onNodeClick={handleNodeClick}
+                                                search={codeSearchTerm}
+                                            />
+                                        ))
+                                    ) : (
+                                        <div className="p-4 text-center text-zinc-500 text-xs">
+                                            No codes yet. Start coding by selecting text.
                                         </div>
                                     )}
                                 </div>
@@ -481,7 +592,7 @@ export default function App() {
                                         if(name) handleCreateCode(name);
                                     }}
                                 >
-                                    <Plus size={14} /> Create New Code
+                                    <Plus size={14} /> Quick Create
                                 </Button>
                             </div>
                         </TabsContent>
@@ -522,7 +633,7 @@ export default function App() {
                      <div className="flex items-center justify-between p-3 border-b border-zinc-800 bg-zinc-950">
                         <div className="flex items-center gap-2">
                              <StickyNote size={16} className="text-amber-500" />
-                             <span className="font-semibold text-zinc-200 text-sm">Edit Annotation</span>
+                             <span className="font-semibold text-zinc-200 text-sm">Edit Annotation #{editingMemo.number}</span>
                         </div>
                         <button onClick={() => setEditingMemo(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
                      </div>

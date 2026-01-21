@@ -1,12 +1,15 @@
+
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
 import { Badge } from './ui/badge';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandShortcut } from './ui/command';
+import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 
 interface ArtifactViewProps {
   artifact: Artifact;
@@ -19,6 +22,7 @@ interface ArtifactViewProps {
   onAddMemo?: (snippet: string, content: string, range?: {start: number, end: number}) => void;
   onEditMemo?: (memo: Memo) => void;
   onUpdateMemo?: (id: string, content: string) => void;
+  highlightedMemoId?: string;
 }
 
 export const ArtifactView: React.FC<ArtifactViewProps> = ({ 
@@ -30,7 +34,8 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   onAddCoding,
   onCreateCode,
   onAddMemo,
-  onEditMemo
+  onEditMemo,
+  highlightedMemoId
 }) => {
   const [selection, setSelection] = useState<{start: number, end: number, text: string, rect: DOMRect} | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -39,6 +44,14 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const [showMemoInput, setShowMemoInput] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
+  const memoRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  // Scroll to memo if highlighted
+  useEffect(() => {
+    if (highlightedMemoId && memoRefs.current[highlightedMemoId]) {
+      memoRefs.current[highlightedMemoId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlightedMemoId]);
 
   // --- Data Preparation ---
 
@@ -257,9 +270,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                  {/* Actions Group - Always visible but typically fallback */}
                                  <CommandGroup heading="Actions">
                                      <CommandItem onSelect={() => {
-                                         // Fallback creation for current search (needs context, or prompt)
-                                         // Since we can't easily get search text here without ref, prompt is safer or just rely on exact matches
-                                         // For now, let's just use prompt to ensure accuracy
+                                         // Fallback creation for current search
                                          const name = prompt("Name for new code:");
                                          if(name) applyCode(name);
                                      }}>
@@ -314,12 +325,10 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             c.start < para.end && c.end > para.start
                         );
                         
-                        // Find memos relevant to this paragraph (both segmented and legacy text-match)
+                        // Find memos relevant to this paragraph
                         const paraMemos = memos.filter(m => 
                            m.relatedIds.includes(artifact.id) && (
-                               // Check for precise segment overlap
                                (m.segment && m.segment.start < para.end && m.segment.end > para.start) ||
-                               // Fallback to text matching for legacy/general memos
                                (!m.segment && m.type === 'observational' && para.text.includes(m.title))
                            )
                         );
@@ -342,15 +351,17 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         <div className="relative group/memo">
                                             <button 
                                                 onClick={() => handleEditMemoClick(paraMemos[0])}
-                                                className="hover:scale-110 transition-transform focus:outline-none"
+                                                className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center"
                                                 title="Click to edit memo"
+                                                ref={el => { memoRefs.current[paraMemos[0].id] = el }}
                                             >
-                                                <StickyNote size={14} className="text-amber-500 fill-amber-500/20 cursor-pointer"/>
+                                                <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500")}/>
+                                                <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
                                             </button>
                                             
                                             {/* Hover Preview Tooltip */}
                                             <div className="absolute left-6 top-0 w-48 bg-amber-100 text-zinc-900 p-2 rounded shadow-xl text-xs z-30 opacity-0 group-hover/memo:opacity-100 pointer-events-none transition-opacity">
-                                                <div className="font-bold mb-1 border-b border-amber-200 pb-1">{paraMemos[0].title}</div>
+                                                <div className="font-bold mb-1 border-b border-amber-200 pb-1">#{paraMemos[0].number} {paraMemos[0].title}</div>
                                                 <div className="line-clamp-3 opacity-75">{paraMemos[0].content}</div>
                                                 <div className="mt-1 text-[9px] text-amber-800 font-bold uppercase tracking-wide">Click icon to edit</div>
                                             </div>
@@ -364,6 +375,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         <CodeHoverCard 
                                             key={code.id}
                                             code={code}
+                                            codes={codes}
                                             codings={codings}
                                         >
                                             <div 
@@ -381,8 +393,8 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         paraStart={para.start}
                                         codings={paraCodings}
                                         codes={codes}
-                                        allCodings={codings} // Pass all codings for counting stats
-                                        memos={paraMemos} // NEW: Pass memos for inline icons
+                                        allCodings={codings}
+                                        memos={paraMemos}
                                         layersVisible={layersVisible}
                                     />
                                 </div>
@@ -405,48 +417,84 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
 const CodeHoverCard: React.FC<{
     code: Code;
+    codes: Code[];
     codings: Coding[];
     children: React.ReactNode;
     align?: "start" | "center" | "end";
     side?: "top" | "right" | "bottom" | "left";
-}> = ({ code, codings, children, align = "center", side = "right" }) => {
+}> = ({ code, codes, codings, children, align = "center", side = "right" }) => {
     
-    // Stats calculation
     const usageCount = codings.filter(c => c.codeId === code.id).length;
+    
+    // Calculate Hierarchy (Simple 2-level for now)
+    const parentCode = codes.find(c => c.id === code.parentId);
     
     return (
         <HoverCard openDelay={200} closeDelay={150}>
             <HoverCardTrigger asChild>
                 {children}
             </HoverCardTrigger>
-            <HoverCardContent side={side} align={align} className="w-80">
-                <div className="flex justify-between space-x-4">
+            <HoverCardContent side={side} align={align} className="w-96 p-0 border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden">
+                {/* Header with Hierarchy */}
+                <div className="bg-zinc-900 border-b border-zinc-800 p-3">
+                     <div className="flex items-center gap-2 text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">
+                         <FolderTree size={10} />
+                         <span>Ontology Path</span>
+                     </div>
+                     <div className="flex items-center gap-2 text-sm text-zinc-300">
+                         {parentCode ? (
+                             <>
+                                <span className="text-zinc-500">{parentCode.name}</span>
+                                <ArrowRight size={12} className="text-zinc-600"/>
+                             </>
+                         ) : (
+                             <span className="text-zinc-500 italic">Root</span>
+                             
+                         )}
+                         {parentCode && <ArrowRight size={12} className="text-zinc-600 hidden"/>}
+                         <span className="font-semibold text-white">{code.name}</span>
+                     </div>
+                </div>
+
+                <div className="p-4 space-y-4">
                     <div className="flex items-start gap-4">
-                         <div className="shrink-0 mt-1">
-                             <div className="h-10 w-10 rounded-full flex items-center justify-center border border-zinc-800 shadow-sm" style={{ backgroundColor: `${code.color}20` }}>
-                                <Tag size={20} style={{ color: code.color }} />
+                         <div className="shrink-0">
+                             <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 shadow-inner" style={{ backgroundColor: `${code.color}20` }}>
+                                <Tag size={24} style={{ color: code.color }} />
                              </div>
                          </div>
                          <div className="space-y-1">
-                             <h4 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                                 {code.name}
-                                 {code.isCore && <Badge variant="secondary" className="text-[9px] h-4 px-1 bg-yellow-900/20 text-yellow-500 border-yellow-500/20">CORE</Badge>}
-                             </h4>
-                             <p className="text-xs text-zinc-400">
-                                 {code.description || "Open coding category derived from grounded analysis."}
-                             </p>
-                             <div className="flex items-center pt-2 gap-4">
-                                 <div className="flex items-center gap-1 text-xs text-zinc-500">
-                                     <Activity size={12} />
-                                     <span>{usageCount} References</span>
-                                 </div>
-                                 <div className="flex items-center gap-1 text-xs text-zinc-500">
-                                     <Hash size={12} />
-                                     <span className="font-mono">{code.id}</span>
-                                 </div>
+                             <div className="flex items-center gap-2">
+                                <h4 className="text-lg font-bold text-zinc-100">{code.name}</h4>
+                                {code.isCore && <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/30 text-[10px] h-5 px-1.5">CORE CATEGORY</Badge>}
                              </div>
+                             <p className="text-xs text-zinc-400 leading-relaxed">
+                                 {code.description || "Open coding category. No specific definition provided."}
+                             </p>
                          </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800 flex items-center gap-3">
+                             <Activity size={16} className="text-blue-500" />
+                             <div>
+                                 <div className="text-[10px] text-zinc-500 uppercase font-bold">Frequency</div>
+                                 <div className="text-sm font-mono text-zinc-200">{usageCount} refs</div>
+                             </div>
+                        </div>
+                        <div className="bg-zinc-900/50 rounded p-2 border border-zinc-800 flex items-center gap-3">
+                             <Hash size={16} className="text-purple-500" />
+                             <div>
+                                 <div className="text-[10px] text-zinc-500 uppercase font-bold">Code ID</div>
+                                 <div className="text-xs font-mono text-zinc-400 truncate w-24" title={code.id}>{code.id}</div>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Footer Action */}
+                <div className="bg-zinc-900/30 border-t border-zinc-800 p-2 flex justify-end">
+                    <Button variant="ghost" size="xs" className="text-zinc-500 hover:text-white">Edit Definition</Button>
                 </div>
             </HoverCardContent>
         </HoverCard>
@@ -504,12 +552,11 @@ const HighlightedText: React.FC<{
             c.start <= segMidGlobal && c.end >= segMidGlobal
         );
 
-        // Check which memos cover this segment (layer visible check done implicitly by points logic but robust check here)
+        // Check which memos cover this segment
         const activeMemosForSegment = layersVisible[LayerType.THEORY_MEMOS] ? memos.filter(m => 
             (m.segment && m.segment.start <= segMidGlobal && m.segment.end >= segMidGlobal)
         ) : [];
         
-        // Also check legacy text matching if no segment found
         const legacyMemos = layersVisible[LayerType.THEORY_MEMOS] && activeMemosForSegment.length === 0 ? memos.filter(m => 
              !m.segment && m.title === segText
         ) : [];
@@ -529,6 +576,7 @@ const HighlightedText: React.FC<{
                     <CodeHoverCard 
                         key={`code-${i}`}
                         code={codeRef} 
+                        codes={codes}
                         codings={allCodings}
                         side="top"
                     >
@@ -540,28 +588,19 @@ const HighlightedText: React.FC<{
                             }}
                         >
                             {segText}
+                            {/* Tiny number badge for the first segment of a coding to identify it? Too cluttered. */}
                         </span>
                     </CodeHoverCard>
                 );
             }
         } else if (allActiveMemos.length > 0) {
-             // If only memo active, still wrap span for styling
              content = <span className="bg-amber-500/20 rounded-sm px-0.5">{segText}</span>;
         } else {
             content = <span key={i}>{segText}</span>;
         }
 
         // 3. Apply Memo Highlighting & Icon
-        // If this segment is part of a memo, wrap it or append icon at end
         if (allActiveMemos.length > 0) {
-            // Check if this segment is the END of the memo to place the icon
-            // For simplicity, we place the icon at the end of the matching segment if it's the last segment of the memo
-            // But since we split exactly on boundaries, the last segment of a memo ends exactly at memo.end.
-            
-            // We'll append the icon to the last segment of the memo range within this paragraph
-            // Or simplistically, append it to every segment that *matches* the memo range? No, too many icons.
-            // We append the icon if `segEnd` matches any `memo.segment.end` (relative to para)
-            
             const endingMemos = allActiveMemos.filter(m => 
                 (m.segment && Math.min(text.length, m.segment.end - paraStart) === segEnd) ||
                 (!m.segment && m.title === segText)
@@ -575,11 +614,13 @@ const HighlightedText: React.FC<{
                         <sup className="ml-0.5 inline-flex">
                             <HoverCard>
                                 <HoverCardTrigger>
-                                    <StickyNote size={10} className="text-amber-500 fill-amber-500/20 cursor-help animate-in zoom-in duration-300" />
+                                     <span className="flex items-center justify-center bg-amber-500 text-black text-[8px] font-bold rounded-sm h-3 px-0.5 cursor-help">
+                                         #{primaryMemo.number}
+                                     </span>
                                 </HoverCardTrigger>
                                 <HoverCardContent side="top" className="w-64 bg-amber-50 border-amber-200 text-amber-900 shadow-xl">
                                     <div className="font-bold text-xs border-b border-amber-200 pb-1 mb-1 flex items-center gap-2">
-                                        <StickyNote size={12}/> Annotation
+                                        <StickyNote size={12}/> Annotation #{primaryMemo.number}
                                     </div>
                                     <div className="text-xs italic mb-2 text-amber-800/70">"{primaryMemo.segment?.text || primaryMemo.title}"</div>
                                     <div className="text-sm font-medium leading-relaxed">{primaryMemo.content}</div>
@@ -589,7 +630,6 @@ const HighlightedText: React.FC<{
                     </span>
                 )
             } else {
-                // Inside a memo but not the end, just highlight
                  segments.push(
                     <span key={`seg-${i}`} className={cn(activeForSegment.length === 0 && "bg-amber-500/10")}>
                         {content}
