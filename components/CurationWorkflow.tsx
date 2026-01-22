@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
+import { CreateArtifactDialog } from './CreateArtifactDialog';
 import { 
   Inbox, 
   SearchCheck, 
@@ -40,7 +41,7 @@ interface CurationWorkflowProps {
   artifacts: Artifact[];
   onUpdateArtifact: (id: string, updates: Partial<Artifact>) => void;
   onDeleteArtifact: (id: string) => void;
-  onCreateArtifact: () => void;
+  onCreateArtifact: (artifact?: Partial<Artifact>) => void;
   participants: Participant[];
   researchers: Researcher[];
 }
@@ -115,6 +116,8 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
 }) => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createDefaultStatus, setCreateDefaultStatus] = useState<TypeOfStatus>('acquisition');
 
   const activeArtifact = useMemo(() => 
     artifacts.find(a => a.id === selectedArtifactId), 
@@ -141,6 +144,11 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
     }
   };
 
+  const openCreateDialog = (status: TypeOfStatus = 'acquisition') => {
+      setCreateDefaultStatus(status);
+      setIsCreateOpen(true);
+  };
+
   return (
     <div className="flex flex-col h-full bg-zinc-950 overflow-hidden relative">
       {/* Board Header */}
@@ -149,7 +157,7 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
            <h2 className="font-semibold text-zinc-100">Research Lifecycle Board</h2>
            <Badge variant="outline" className="text-zinc-500 border-zinc-700 ml-2">5-Phase Flow</Badge>
         </div>
-        <Button onClick={onCreateArtifact} size="sm" variant="brand" className="gap-2">
+        <Button onClick={() => openCreateDialog()} size="sm" variant="brand" className="gap-2">
             <Plus size={16} /> New Item
         </Button>
       </div>
@@ -165,15 +173,26 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
                 onDrop={(e) => handleDrop(e, col.id)}
             >
               {/* Column Header */}
-              <div className="p-3 border-b border-zinc-800/50 bg-zinc-900/50 rounded-t-lg">
+              <div className="p-3 border-b border-zinc-800/50 bg-zinc-900/50 rounded-t-lg group">
                  <div className="flex items-center justify-between mb-1">
                      <div className="flex items-center gap-2">
                         <col.icon size={16} className={col.color} />
                         <span className="font-semibold text-sm text-zinc-200">{col.label.split(' - ')[0]}</span>
                      </div>
-                     <Badge variant="secondary" className="bg-zinc-800 text-zinc-500 text-[10px] px-1.5 h-5 min-w-[20px] justify-center">
-                        {artifacts.filter(a => a.status === col.id).length}
-                    </Badge>
+                     <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="bg-zinc-800 text-zinc-500 text-[10px] px-1.5 h-5 min-w-[20px] justify-center">
+                            {artifacts.filter(a => a.status === col.id).length}
+                        </Badge>
+                        <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-5 w-5 text-zinc-600 hover:text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => openCreateDialog(col.id)}
+                            title={`Add to ${col.label.split(' - ')[0]}`}
+                        >
+                            <Plus size={14} />
+                        </Button>
+                     </div>
                  </div>
                  <div className="text-xs font-bold text-zinc-400 pl-6 mb-0.5">{col.label.split(' - ')[1]}</div>
                  <div className="text-[10px] text-zinc-600 pl-6 truncate">{col.subLabel}</div>
@@ -194,8 +213,11 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
                     />
                 ))}
                 {artifacts.filter(a => a.status === col.id).length === 0 && (
-                    <div className="h-24 border-2 border-dashed border-zinc-800 rounded-lg flex items-center justify-center text-zinc-700 text-xs">
-                        Drop items here
+                    <div 
+                        className="h-24 border-2 border-dashed border-zinc-800 rounded-lg flex items-center justify-center text-zinc-700 text-xs cursor-pointer hover:border-zinc-700 hover:text-zinc-500 transition-colors"
+                        onClick={() => openCreateDialog(col.id)}
+                    >
+                        + Add Item
                     </div>
                 )}
               </div>
@@ -218,6 +240,14 @@ export const CurationWorkflow: React.FC<CurationWorkflowProps> = ({
              }}
           />
       )}
+
+      {/* Create Dialog */}
+      <CreateArtifactDialog 
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreate={onCreateArtifact}
+        defaultStatus={createDefaultStatus}
+      />
     </div>
   );
 };

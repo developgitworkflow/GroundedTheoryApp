@@ -8,7 +8,7 @@ import { CurationWorkflow } from './components/CurationWorkflow';
 import { MemoDirectory } from './components/MemoDirectory'; 
 import { SettingsDialog } from './components/SettingsDialog'; 
 import { Visualizations } from './components/Visualizations'; 
-import { ReportView } from './components/ReportView'; // Import ReportView
+import { ReportView } from './components/ReportView';
 import { OntologyManager } from './components/OntologyManager'; 
 import { suggestOntology } from './services/geminiService'; 
 import { exportOntologyToOwl, parseOwlToCodes } from './lib/owlUtils'; 
@@ -23,7 +23,13 @@ import {
   ChevronDown,
   Users,
   GraduationCap,
-  X
+  X,
+  Database,
+  Search,
+  Lightbulb,
+  Layout,
+  FileText,
+  CheckCircle2
 } from 'lucide-react';
 
 import { Button } from './components/ui/button';
@@ -309,31 +315,41 @@ export default function App() {
       }
   };
 
-  const handleCreateArtifact = () => {
+  const handleCreateArtifact = (partial?: Partial<Artifact>) => {
+      // Check if this is a React event object (onClick)
+      const isEvent = partial && (partial as any).nativeEvent;
+      const actualPartial = isEvent ? undefined : partial;
+
       const defaultName = `New Import ${Date.now().toString().slice(-4)}`;
-      const name = prompt("Enter artifact name:", defaultName);
+      let name = actualPartial?.name;
       
-      if (name === null) return; // User cancelled
+      // If no partial data provided (legacy/direct click fallback), prompt
+      if (!actualPartial) {
+          const input = prompt("Enter artifact name:", defaultName);
+          if (input === null) return;
+          name = input.trim() || defaultName;
+      }
 
       const newArt: Artifact = {
           id: `a-${Date.now()}`,
           hashID: Math.random().toString(36).substring(2),
-          name: name.trim() || defaultName,
-          type: 'document',
-          media: 'text',
-          access: 'private',
-          status: 'acquisition',
+          name: name || defaultName,
+          type: actualPartial?.type || 'document',
+          media: actualPartial?.media || 'text',
+          access: actualPartial?.access || 'private',
+          status: actualPartial?.status || 'acquisition',
           responsibleId: activeResearcherId,
-          content: 'Raw content pending appraisal...',
+          content: actualPartial?.content || 'Raw content pending appraisal...',
           curation: {
               format: 'Text',
               source: 'Unknown',
               dateCreated: new Date().toISOString(),
-              consentObtained: false
+              consentObtained: false,
+              ...(actualPartial?.curation || {})
           }
       };
       setArtifacts(prev => [...prev, newArt]);
-      addJournalEntry(`Received new artifact into Data Acquisition: ${newArt.name}`, 'auto');
+      addJournalEntry(`Received new artifact into ${newArt.status}: ${newArt.name}`, 'auto');
   };
 
   const handleAddCoding = (coding: Omit<Coding, 'id'>) => {
@@ -401,245 +417,97 @@ export default function App() {
           group.children.forEach(childName => {
               const childCodeIndex = newCodes.findIndex(c => c.name.toLowerCase() === childName.toLowerCase());
               if (childCodeIndex !== -1) {
-                  newCodes[childCodeIndex] = { ...newCodes[childCodeIndex], parentId: parentCode!.id };
+                  // Link
+                  newCodes[childCodeIndex] = { ...newCodes[childCodeIndex], parentId: parentCode.id };
                   updates++;
               }
           });
       });
 
-      setCodes(newCodes);
-      addJournalEntry(`AI Elaborated Ontology: Organized ${updates} codes into ${suggestions.length} categories.`, 'auto');
+      if (updates > 0) {
+          setCodes(newCodes);
+          addJournalEntry(`AI Elaborated Ontology: Linked ${updates} codes to categories.`, 'auto');
+      }
       setIsElaborating(false);
   };
 
-  const handleAddMemo = (snippet: string, content: string, range?: { start: number, end: number }) => {
-      const newMemo: Memo = {
-          id: `memo-${Date.now()}`,
-          title: snippet.substring(0, 15) + (snippet.length > 15 ? '...' : ''),
-          content,
-          relatedIds: [activeArtifact.id],
-          createdAt: new Date().toISOString(),
-          type: 'observational',
-          segment: range ? { start: range.start, end: range.end, text: snippet } : undefined,
-          number: memos.length + 1,
-          authorId: activeResearcherId
-      };
-      setMemos(prev => [...prev, newMemo]);
-      addJournalEntry(`Added observational memo #${newMemo.number}`, 'auto');
-      
-      if (!layersVisible[LayerType.THEORY_MEMOS]) {
-          toggleLayer(LayerType.THEORY_MEMOS);
-      }
-  };
-
-  const handleUpdateMemo = (id: string, updates: Partial<Memo> | string) => {
-    const actualUpdates = typeof updates === 'string' ? { content: updates } : updates;
-    setMemos(prev => prev.map(m => m.id === id ? { ...m, ...actualUpdates } : m));
-    if (typeof updates === 'string') addJournalEntry(`Updated annotation ${id}`, 'manual');
-  };
-
-  const handleDeleteMemo = (id: string) => {
-      if(confirm('Delete this memo/finding?')) {
-          setMemos(prev => prev.filter(m => m.id !== id));
-          addJournalEntry(`Deleted memo ${id}`, 'manual');
-      }
-  };
-
-  const handleAddTheoryMemo = (title: string, content: string) => {
-      const newMemo: Memo = {
-          id: `tmemo-${Date.now()}`,
-          title,
-          content,
-          relatedIds: [],
-          createdAt: new Date().toISOString(),
-          type: 'theoretical',
-          number: memos.length + 1,
-          authorId: activeResearcherId
-      };
-      setMemos(prev => [...prev, newMemo]);
-      setTheoryArtefact(prev => ({ ...prev, content: content }));
-      addJournalEntry(`Updated Theory Artefact Content: ${title}`, 'auto');
-  };
-
-  const handleAddFinding = (title: string, content: string, relatedIds: string[] = []) => {
-      const newMemo: Memo = {
-          id: `finding-${Date.now()}`,
-          title,
-          content,
-          relatedIds: relatedIds,
-          createdAt: new Date().toISOString(),
-          type: 'finding',
-          number: memos.length + 1,
-          authorId: activeResearcherId
-      };
-      setMemos(prev => [...prev, newMemo]);
-      addJournalEntry(`Recorded new finding: ${title}`, 'auto');
-  };
-
-  const handleSetCoreCategory = (codeId: string) => {
-      setCodes(prev => prev.map(c => ({
-          ...c,
-          isCore: c.id === codeId,
-          kind: c.id === codeId ? 'category' : c.kind
-      })));
-      const name = codes.find(c => c.id === codeId)?.name;
-      addJournalEntry(`Defined [${name}] as Core Category for the curated model.`, 'manual');
-  };
-
-  const handleNodeClick = (codeId: string) => {
-    setCodeFilter(prev => prev === codeId ? null : codeId);
-    if (activeTab !== 'analyze') {
-        setActiveTab('analyze');
-    }
-  };
-
-  const openMemoEditor = (memo: Memo) => {
-      setEditingMemo(memo);
-      setEditMemoContent(memo.content);
-  };
-
-  const saveEditedMemo = () => {
-    if (editingMemo) {
-      handleUpdateMemo(editingMemo.id, editMemoContent);
-    }
-    setEditingMemo(null);
-    setEditMemoContent('');
-  };
-
-  const handleSaveSettings = (newSettings: ProjectSettings, updatedTeam?: ResearchTeam, updatedMemos?: Memo[]) => {
-    setProjectSettings(newSettings);
-    if (updatedTeam) {
-        setResearchTeam(updatedTeam);
-    }
-    if (updatedMemos) {
-        setMemos(updatedMemos);
-    }
-    setTheoryArtefact(prev => ({ ...prev, type: newSettings.theoryType }));
-    addJournalEntry(`Updated project settings and team configuration`, 'auto');
-  };
-
   return (
-    <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden">
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileImport} 
-        className="hidden" 
-        accept=".owl,.xml" 
-      />
-
-      {/* Header */}
-      <header className="h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-6 shrink-0 z-30">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 text-blue-500">
-             <BrainCircuit size={28} className="text-blue-600" />
-             <span className="font-bold text-xl tracking-tight text-white">STRATUM</span>
-          </div>
-          <Badge variant="secondary" className="font-normal text-zinc-400 border-zinc-800 hidden md:inline-flex">
-            Project: {projectSettings.projectName}
-          </Badge>
-        </div>
+    <div className="flex flex-col h-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30">
         
-        <div className="flex items-center gap-3">
-            <div className="mr-4">
-                <HoverCard openDelay={0} closeDelay={200}>
-                    <HoverCardTrigger asChild>
-                         <Button variant="outline" size="sm" className="gap-2 border-zinc-700 bg-zinc-900/50 pl-1">
-                             <Avatar className="h-6 w-6 border border-zinc-600">
-                                <AvatarFallback style={{ backgroundColor: activeResearcher.color, color: 'white' }}>{activeResearcher.initials}</AvatarFallback>
-                             </Avatar>
-                             <span className="text-zinc-200">{activeResearcher.name}</span>
-                             <ChevronDown size={12} className="text-zinc-500" />
-                         </Button>
-                    </HoverCardTrigger>
-                    <HoverCardContent align="end" className="w-60 p-2 bg-zinc-950 border-zinc-800">
-                        <div className="text-xs font-semibold text-zinc-500 mb-2 px-2 uppercase flex items-center gap-2">
-                           <Users size={12}/> Switch Researcher
-                        </div>
-                        {researchTeam.researchers.map(r => (
-                            <div 
-                                key={r.id}
-                                onClick={() => setActiveResearcherId(r.id)}
-                                className={cn(
-                                    "flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-zinc-800 transition-colors",
-                                    r.id === activeResearcherId ? "bg-zinc-900 ring-1 ring-zinc-800" : ""
-                                )}
-                            >
-                                 <Avatar className="h-8 w-8">
-                                     <AvatarFallback style={{ backgroundColor: r.color, color: 'white' }}>{r.initials}</AvatarFallback>
-                                 </Avatar>
-                                 <div className="flex flex-col">
-                                     <span className="text-sm font-medium text-zinc-200">{r.name}</span>
-                                     <span className="text-[10px] text-zinc-500 flex items-center gap-1">
-                                        {r.role === 'Senior' ? <GraduationCap size={10} /> : <Users size={10} />}
-                                        {r.role}
-                                     </span>
-                                 </div>
-                                 {r.id === activeResearcherId && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500" />}
-                            </div>
-                        ))}
-                    </HoverCardContent>
-                </HoverCard>
+        {/* Main Layout */}
+        <div className="flex-1 flex overflow-hidden">
+            
+            {/* Sidebar */}
+            <div className="w-16 bg-zinc-950 border-r border-zinc-800 flex flex-col items-center py-4 gap-4 z-20">
+                {/* Branding */}
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/20 mb-2">
+                    <BrainCircuit className="text-white" size={24} />
+                </div>
+
+                <div className="flex-1 flex flex-col gap-2 w-full px-2">
+                   <SidebarTab active={activeTab === 'curate'} onClick={() => setActiveTab('curate')} icon={Database} label="Data" />
+                   <SidebarTab active={activeTab === 'analyze'} onClick={() => setActiveTab('analyze')} icon={Search} label="Analyze" />
+                   <SidebarTab active={activeTab === 'theory'} onClick={() => setActiveTab('theory')} icon={Lightbulb} label="Theory" />
+                   <SidebarTab active={activeTab === 'visualize'} onClick={() => setActiveTab('visualize')} icon={Layout} label="Viz" />
+                   <SidebarTab active={activeTab === 'report'} onClick={() => setActiveTab('report')} icon={FileText} label="Report" />
+                </div>
+
+                <div className="flex flex-col gap-3 w-full px-2">
+                    <button onClick={() => setIsJournalOpen(true)} className="p-2 text-zinc-500 hover:text-amber-500 hover:bg-zinc-900 rounded-md transition-colors relative group">
+                        <BookMarked size={20} />
+                        <span className="absolute left-14 bg-zinc-800 text-zinc-200 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">Journal</span>
+                    </button>
+                    <button onClick={() => setIsSettingsOpen(true)} className="p-2 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-md transition-colors relative group">
+                        <Settings size={20} />
+                        <span className="absolute left-14 bg-zinc-800 text-zinc-200 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">Settings</span>
+                    </button>
+                    
+                    {/* User Profile */}
+                    <div className="mt-2 pt-2 border-t border-zinc-800 w-full flex justify-center">
+                        <HoverCard>
+                            <HoverCardTrigger>
+                                <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-transparent hover:ring-zinc-700 transition-all">
+                                    <AvatarFallback className="bg-blue-900 text-blue-200 text-xs">{activeResearcher.initials}</AvatarFallback>
+                                </Avatar>
+                            </HoverCardTrigger>
+                            <HoverCardContent side="right" className="w-64 bg-zinc-950 border-zinc-800 p-0 ml-2">
+                                <div className="p-3 bg-zinc-900 border-b border-zinc-800 flex items-center gap-3">
+                                    <Avatar className="h-10 w-10">
+                                        <AvatarFallback className="bg-blue-600 text-white">{activeResearcher.initials}</AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                        <div className="font-bold text-sm">{activeResearcher.name}</div>
+                                        <div className="text-xs text-zinc-500">{activeResearcher.role} Researcher</div>
+                                    </div>
+                                </div>
+                                <div className="p-2">
+                                    <div className="text-[10px] uppercase font-bold text-zinc-500 px-2 py-1">Switch Account</div>
+                                    {researchTeam.researchers.map(r => (
+                                        <button 
+                                            key={r.id}
+                                            onClick={() => setActiveResearcherId(r.id)}
+                                            className={cn(
+                                                "w-full text-left px-2 py-1.5 text-xs rounded flex items-center gap-2",
+                                                activeResearcherId === r.id ? "bg-blue-900/20 text-blue-400" : "text-zinc-400 hover:bg-zinc-900"
+                                            )}
+                                        >
+                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }} />
+                                            {r.name}
+                                            {activeResearcherId === r.id && <CheckCircle2 size={10} className="ml-auto" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </HoverCardContent>
+                        </HoverCard>
+                    </div>
+                </div>
             </div>
 
-            <Button 
-                onClick={() => setIsJournalOpen(!isJournalOpen)}
-                variant={isJournalOpen ? "secondary" : "outline"}
-                size="sm"
-                className={cn("gap-2", isJournalOpen && "bg-amber-950/30 text-amber-500 border-amber-900/50 hover:bg-amber-950/50")}
-            >
-                <BookMarked size={16} /> Journal
-            </Button>
-            <div className="w-px h-6 bg-zinc-800 mx-1"></div>
-            <Button 
-                variant="ghost" 
-                size="icon" 
-                className="rounded-full text-zinc-400"
-                onClick={() => setIsSettingsOpen(true)}
-            >
-                <Settings size={20} />
-            </Button>
-        </div>
-      </header>
-
-      {/* Main Workspace */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-        <div className="h-12 bg-zinc-950 border-b border-zinc-800 flex items-center px-6 justify-between shrink-0">
-             <TabsList className="bg-zinc-900 border border-zinc-800">
-                 <TabsTrigger value="curate" className="px-6">1. Ingest & Curation</TabsTrigger>
-                 <TabsTrigger value="analyze" className="px-6">2. Text Analysis</TabsTrigger>
-                 <TabsTrigger value="memos" className="px-6">3. Theory Builder</TabsTrigger>
-                 <TabsTrigger value="visualize" className="px-6">4. Visual Analytics</TabsTrigger>
-                 <TabsTrigger value="report" className="px-6">5. Report</TabsTrigger>
-             </TabsList>
-             
-             <div className="text-xs text-zinc-500 font-mono flex items-center gap-2">
-                {activeTab === 'analyze' && (
-                    <>
-                        <span>Active Artifact:</span>
-                        <select 
-                            value={activeArtifactId}
-                            onChange={(e) => setActiveArtifactId(e.target.value)}
-                            className="bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 focus:outline-none"
-                        >
-                            {artifacts.filter(a => a.status === 'analysis' || a.status === 'report').map(a => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                            ))}
-                        </select>
-                    </>
-                )}
-             </div>
-        </div>
-
-        <div className="flex flex-1 overflow-hidden relative">
-            {/* Left: Layer Controls (Only visible in Analysis Mode) */}
-            {activeTab === 'analyze' && <LayerControl layers={layers} toggleLayer={toggleLayer} />}
-
-            {/* Center: Canvas */}
-            <div className="flex-1 relative bg-zinc-950/50 flex flex-col overflow-hidden">
+            {/* Stage Content */}
+            <main className="flex-1 relative overflow-hidden bg-zinc-950">
                 
-                {/* 1. CURATION WORKFLOW */}
-                <TabsContent value="curate" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
+                {/* DATA CURATION STAGE */}
+                {activeTab === 'curate' && (
                     <CurationWorkflow 
                         artifacts={artifacts}
                         onUpdateArtifact={handleUpdateArtifact}
@@ -648,180 +516,276 @@ export default function App() {
                         participants={projectSettings.participants}
                         researchers={researchTeam.researchers}
                     />
-                </TabsContent>
+                )}
 
-                {/* 2. TEXT ANALYSIS */}
-                <TabsContent value="analyze" className="flex-1 h-full mt-0 relative data-[state=inactive]:hidden">
-                    {activeArtifact && (activeArtifact.status === 'analysis' || activeArtifact.status === 'report') ? (
-                        <>
-                            {layersVisible[LayerType.ARTIFACT] && (
-                            <ArtifactView 
-                                artifact={activeArtifact} 
-                                codings={codings} 
-                                codes={codes} 
-                                memos={memos}
-                                researchTeam={researchTeam} 
-                                activeResearcherId={activeResearcherId} 
-                                votes={votes} 
-                                onVote={handleVote} 
-                                layersVisible={layersVisible}
-                                onAddCoding={handleAddCoding}
-                                onCreateCode={handleCreateCode}
-                                onAddMemo={handleAddMemo}
-                                onEditMemo={openMemoEditor} 
-                                selectedCodeId={codeFilter}
-                                onClearSelection={() => setCodeFilter(null)}
-                                onUpdateArtifact={handleUpdateArtifact}
-                                participants={projectSettings.participants}
-                            />
+                {/* ANALYSIS STAGE */}
+                {activeTab === 'analyze' && (
+                    <div className="flex h-full">
+                        {/* Left Sidebar: Artifacts & Codes */}
+                        <div className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col">
+                             <div className="flex border-b border-zinc-800 bg-zinc-950">
+                                 <button 
+                                     onClick={() => setSidebarTab('artifacts')}
+                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'artifacts' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
+                                 >
+                                     Documents
+                                 </button>
+                                 <button 
+                                     onClick={() => setSidebarTab('codes')}
+                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'codes' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
+                                 >
+                                     Code System
+                                 </button>
+                             </div>
+
+                             <div className="flex-1 overflow-hidden">
+                                 {sidebarTab === 'artifacts' ? (
+                                     <div className="h-full overflow-y-auto p-2 space-y-1">
+                                         {artifacts.map(art => (
+                                             <div 
+                                                 key={art.id}
+                                                 onClick={() => setActiveArtifactId(art.id)}
+                                                 className={cn(
+                                                     "p-2 rounded cursor-pointer text-sm flex items-center gap-2",
+                                                     activeArtifactId === art.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800/50"
+                                                 )}
+                                             >
+                                                 {art.media === 'text' ? <FileText size={14} /> : <Tag size={14}/>}
+                                                 <span className="truncate">{art.name}</span>
+                                             </div>
+                                         ))}
+                                         <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-zinc-500 border border-dashed border-zinc-800" onClick={() => handleCreateArtifact()}>
+                                             <Plus size={12} className="mr-2"/> Import
+                                         </Button>
+                                     </div>
+                                 ) : (
+                                     <OntologyManager 
+                                        codes={codes}
+                                        codings={codings}
+                                        onNodeClick={(id) => setCodeFilter(id === codeFilter ? null : id)}
+                                        selectedCodeId={codeFilter}
+                                        onCreateCode={handleCreateCode}
+                                        onUpdateCode={handleUpdateCode}
+                                        onDeleteCode={handleDeleteCode}
+                                        onImport={handleImportClick}
+                                        onExport={handleExportOwl}
+                                        onElaborate={handleElaborateOntology}
+                                        isElaborating={isElaborating}
+                                     />
+                                 )}
+                             </div>
+                        </div>
+
+                        {/* Middle: Artifact View */}
+                        <div className="flex-1 relative">
+                            {activeArtifact ? (
+                                <>
+                                    <ArtifactView 
+                                        artifact={activeArtifact}
+                                        codings={codings}
+                                        codes={codes}
+                                        memos={memos}
+                                        researchTeam={researchTeam}
+                                        activeResearcherId={activeResearcherId}
+                                        votes={votes}
+                                        onVote={handleVote}
+                                        layersVisible={layersVisible}
+                                        onAddCoding={handleAddCoding}
+                                        onCreateCode={(name) => handleCreateCode(name, 'code')}
+                                        onAddMemo={(snippet, content, range) => {
+                                            const newMemo: Memo = {
+                                                id: `memo-${Date.now()}`,
+                                                title: snippet.substring(0, 20) + '...',
+                                                content,
+                                                relatedIds: [activeArtifact.id],
+                                                createdAt: new Date().toISOString(),
+                                                type: 'observational',
+                                                number: memos.length + 1,
+                                                authorId: activeResearcherId,
+                                                segment: { start: range!.start, end: range!.end, text: snippet }
+                                            };
+                                            setMemos([...memos, newMemo]);
+                                            addJournalEntry(`Created annotation on ${activeArtifact.name}: "${content.substring(0, 20)}..."`, 'auto');
+                                        }}
+                                        onEditMemo={(memo) => {
+                                            // Handle edit memo (simple prompt for now or open dialog)
+                                            const newContent = prompt("Update annotation:", memo.content);
+                                            if (newContent) {
+                                                 setMemos(prev => prev.map(m => m.id === memo.id ? { ...m, content: newContent } : m));
+                                            }
+                                        }}
+                                        selectedCodeId={codeFilter}
+                                        onClearSelection={() => setCodeFilter(null)}
+                                        onUpdateArtifact={handleUpdateArtifact}
+                                        participants={projectSettings.participants}
+                                    />
+                                    {/* Layer Control Overlay */}
+                                    <div className="absolute top-4 right-4 z-10">
+                                        <LayerControl layers={layers} toggleLayer={toggleLayer} />
+                                    </div>
+                                    <TheoryGraph 
+                                        codes={codes} 
+                                        codings={codings} 
+                                        layersVisible={layersVisible} 
+                                        onNodeClick={(id) => setCodeFilter(id)}
+                                        selectedCodeId={codeFilter}
+                                    />
+                                </>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-zinc-500">
+                                    Select a document to begin analysis.
+                                </div>
                             )}
+                        </div>
 
-                            <TheoryGraph 
-                                codes={codes} 
-                                codings={codings} 
-                                layersVisible={layersVisible} 
-                                onNodeClick={handleNodeClick}
-                                selectedCodeId={codeFilter}
+                        {/* Right: Memo Directory (Collapsible or just small) */}
+                        <div className="w-64 bg-zinc-900 border-l border-zinc-800 hidden xl:block">
+                             <MemoDirectory 
+                                memos={memos} 
+                                artifacts={artifacts} 
+                                onSelectMemo={(m) => {
+                                    if(m.relatedIds.length > 0) {
+                                        const artId = m.relatedIds[0];
+                                        setActiveArtifactId(artId);
+                                        // Highlight logic could go here
+                                    }
+                                }}
                             />
-                        </>
-                    ) : (
-                         <div className="flex items-center justify-center h-full text-zinc-500 flex-col gap-2">
-                            <FilePlus size={48} className="opacity-20" />
-                            <p>Select an active artifact (in Analysis Phase) from the top bar or Ingest more data in the Curation tab.</p>
-                         </div>
-                    )}
-                </TabsContent>
+                        </div>
+                    </div>
+                )}
 
-                {/* 3. THEORY BUILDER */}
-                <TabsContent value="memos" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
+                {/* THEORY BUILDING STAGE */}
+                {activeTab === 'theory' && (
                     <TheoryBuilder 
                         codes={codes}
-                        codings={codings} 
-                        artifacts={artifacts} 
-                        memos={memos.filter(m => m.type === 'theoretical' || m.type === 'finding')}
+                        codings={codings}
+                        artifacts={artifacts}
+                        memos={memos}
                         researchQuestions={projectSettings.theoreticalFramework.researchQuestions}
-                        onSetCoreCategory={handleSetCoreCategory}
-                        onAddMemo={handleAddTheoryMemo}
-                        onAddFinding={handleAddFinding}
-                        onUpdateMemo={handleUpdateMemo}
-                        onDeleteMemo={handleDeleteMemo}
+                        onSetCoreCategory={(id) => {
+                            setCodes(prev => prev.map(c => ({ ...c, isCore: c.id === id })));
+                            addJournalEntry(`Designated [${codes.find(c => c.id === id)?.name}] as Core Category`, 'auto');
+                        }}
+                        onAddMemo={(title, content) => {
+                            const newMemo: Memo = {
+                                id: `theory-${Date.now()}`,
+                                title,
+                                content,
+                                relatedIds: [],
+                                createdAt: new Date().toISOString(),
+                                type: 'theoretical',
+                                number: memos.length + 1,
+                                authorId: activeResearcherId
+                            };
+                            setMemos(prev => [...prev, newMemo]);
+                            addJournalEntry(`Added Theoretical Memo: ${title}`, 'auto');
+                        }}
+                        onAddFinding={(title, content, relatedIds) => {
+                            const newMemo: Memo = {
+                                id: `finding-${Date.now()}`,
+                                title,
+                                content,
+                                relatedIds: relatedIds || [],
+                                createdAt: new Date().toISOString(),
+                                type: 'finding',
+                                number: memos.length + 1,
+                                authorId: activeResearcherId
+                            };
+                            setMemos(prev => [...prev, newMemo]);
+                            addJournalEntry(`Logged Finding: ${title}`, 'auto');
+                        }}
+                        onUpdateMemo={(id, updates) => {
+                            setMemos(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+                        }}
+                        onDeleteMemo={(id) => {
+                            if(confirm("Delete this memo?")) {
+                                setMemos(prev => prev.filter(m => m.id !== id));
+                            }
+                        }}
+                        onCreateCode={(name, kind) => handleCreateCode(name, kind)}
                         theoryArtefact={theoryArtefact}
-                        onCreateCode={handleCreateCode}
-                        settings={projectSettings} // Pass settings
-                        onOpenSettings={() => setIsSettingsOpen(true)} // Pass handler
+                        settings={projectSettings}
+                        onOpenSettings={() => setIsSettingsOpen(true)}
                     />
-                </TabsContent>
+                )}
 
-                 {/* 4. VISUAL ANALYTICS */}
-                <TabsContent value="visualize" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
+                {/* VISUALIZATION STAGE */}
+                {activeTab === 'visualize' && (
                     <Visualizations 
-                        codes={codes} 
-                        codings={codings} 
-                        artifacts={artifacts} 
-                        settings={projectSettings} 
+                        codes={codes}
+                        codings={codings}
+                        artifacts={artifacts}
+                        settings={projectSettings}
                     />
-                </TabsContent>
+                )}
 
-                {/* 5. REPORT */}
-                <TabsContent value="report" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
+                {/* REPORTING STAGE */}
+                {activeTab === 'report' && (
                     <ReportView 
                         settings={projectSettings}
                         memos={memos}
                         codes={codes}
                         artifacts={artifacts}
-                        onUpdateSettings={setProjectSettings}
+                        onUpdateSettings={(s) => setProjectSettings(s)}
                     />
-                </TabsContent>
-
-            </div>
-
-            {/* Right: Sidebar */}
-            {activeTab === 'analyze' && (
-                <div className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col z-20 shadow-xl overflow-hidden">
-                    <Tabs value={sidebarTab} onValueChange={setSidebarTab} className="flex-1 flex flex-col">
-                        <div className="flex items-center justify-center p-2 bg-zinc-950 border-b border-zinc-800">
-                             <TabsList className="bg-zinc-900 grid grid-cols-2 w-full">
-                                <TabsTrigger value="codes" className="text-xs gap-2"><Tag size={12}/> Ontology</TabsTrigger>
-                                <TabsTrigger value="memos" className="text-xs gap-2"><StickyNote size={12}/> Directory</TabsTrigger>
-                             </TabsList>
-                        </div>
-
-                        <TabsContent value="codes" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
-                             <OntologyManager 
-                                codes={codes}
-                                codings={codings}
-                                onNodeClick={handleNodeClick}
-                                selectedCodeId={codeFilter}
-                                onCreateCode={handleCreateCode}
-                                onUpdateCode={handleUpdateCode}
-                                onDeleteCode={handleDeleteCode}
-                                onImport={handleImportClick}
-                                onExport={handleExportOwl}
-                                onElaborate={handleElaborateOntology}
-                                isElaborating={isElaborating}
-                             />
-                        </TabsContent>
-
-                        <TabsContent value="memos" className="flex-1 flex flex-col mt-0 data-[state=inactive]:hidden overflow-hidden">
-                            <MemoDirectory 
-                                memos={memos}
-                                artifacts={artifacts}
-                                onSelectMemo={openMemoEditor}
-                            />
-                        </TabsContent>
-                    </Tabs>
-                </div>
-            )}
+                )}
+                
+            </main>
         </div>
 
-      <ReflexivityJournal 
+        {/* Global Overlays */}
+        <ReflexivityJournal 
             entries={journalEntries}
-            onAddEntry={(content) => addJournalEntry(content, 'manual')}
+            onAddEntry={(c) => addJournalEntry(c)}
             isOpen={isJournalOpen}
             onClose={() => setIsJournalOpen(false)}
         />
-    
-      <SettingsDialog 
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={projectSettings}
-        team={researchTeam}
-        memos={memos}
-        activeResearcherId={activeResearcherId}
-        onSave={handleSaveSettings}
-      />
 
-      {editingMemo && (
-             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                 <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl w-[400px] animate-in fade-in zoom-in-95 overflow-hidden">
-                     <div className="flex items-center justify-between p-3 border-b border-zinc-800 bg-zinc-950">
-                        <div className="flex items-center gap-2">
-                             <StickyNote size={16} className="text-amber-500" />
-                             <span className="font-semibold text-zinc-200 text-sm">Edit Annotation #{editingMemo.number}</span>
-                        </div>
-                        <button onClick={() => setEditingMemo(null)} className="text-zinc-500 hover:text-white"><X size={16} /></button>
-                     </div>
-                     <div className="p-4 space-y-4">
-                         <div>
-                             <label className="text-[10px] uppercase text-zinc-500 font-bold">Title/Ref</label>
-                             <div className="text-zinc-300 text-sm border-b border-zinc-800 pb-1">{editingMemo.title}</div>
-                         </div>
-                         <div>
-                             <label className="text-[10px] uppercase text-zinc-500 font-bold mb-1 block">Content</label>
-                             <textarea 
-                                className="w-full h-32 bg-zinc-950/50 border border-zinc-700 rounded p-2 text-sm text-zinc-200 resize-none focus:outline-none focus:border-amber-500"
-                                value={editMemoContent}
-                                onChange={(e) => setEditMemoContent(e.target.value)}
-                             />
-                         </div>
-                     </div>
-                     <div className="p-3 bg-zinc-950 border-t border-zinc-800 flex justify-end gap-2">
-                         <Button variant="ghost" size="sm" onClick={() => setEditingMemo(null)}>Cancel</Button>
-                         <Button variant="brand" size="sm" onClick={saveEditedMemo} className="bg-amber-600 hover:bg-amber-700 text-white">Save Changes</Button>
-                     </div>
-                 </div>
-             </div>
-        )}
+        <SettingsDialog 
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            settings={projectSettings}
+            team={researchTeam}
+            memos={memos} // Pass memos to settings for Finding management
+            activeResearcherId={activeResearcherId}
+            onSave={(newSettings, newTeam, newMemos) => {
+                setProjectSettings(newSettings);
+                if(newTeam) setResearchTeam(newTeam);
+                if(newMemos) setMemos(newMemos);
+                
+                // Update Theory Artefact type if changed
+                if(newSettings.theoryType !== theoryArtefact.type) {
+                    setTheoryArtefact(prev => ({ ...prev, type: newSettings.theoryType }));
+                }
+            }}
+        />
+        
+        {/* Hidden File Input for Imports */}
+        <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileImport} 
+            accept=".owl,.xml,.rdf" 
+            className="hidden" 
+        />
     </div>
   );
-}
+};
+
+// Simple sidebar button component
+const SidebarTab = ({ active, onClick, icon: Icon, label }: any) => (
+    <button 
+        onClick={onClick}
+        className={cn(
+            "flex flex-col items-center justify-center p-2 rounded-lg transition-all w-full gap-1",
+            active 
+                ? "bg-zinc-800 text-blue-400" 
+                : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900"
+        )}
+        title={label}
+    >
+        <Icon size={20} />
+        <span className="text-[10px] font-medium">{label}</span>
+    </button>
+);
