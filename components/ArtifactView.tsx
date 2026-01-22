@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info, ChevronRight, Edit2 } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
@@ -34,10 +34,10 @@ interface ArtifactViewProps {
   participants?: Participant[];
 }
 
-// Hover State Interface (Codes only for Lens)
+// Unified Hover State for Lens
 interface HoverState {
-    type: 'code';
-    data: Code;
+    type: 'code' | 'memo';
+    data: Code | Memo;
     relatedData?: any; 
 }
 
@@ -69,7 +69,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
   
-  // Centralized Hover State (Codes Only)
+  // Centralized Hover State (Lens)
   const [activeHover, setActiveHover] = useState<HoverState | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -127,6 +127,15 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
           type: 'code',
           data: code,
           relatedData: { usageCount, contributors, parentCode }
+      });
+  };
+
+  const handleMemoHover = (memo: Memo) => {
+      const author = researchTeam?.researchers.find(r => r.id === memo.authorId);
+      setActiveHover({
+          type: 'memo',
+          data: memo,
+          relatedData: { author }
       });
   };
 
@@ -258,51 +267,105 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             />
         )}
 
-        {/* --- INSPECTOR LENS (Centralized Hover HUD - CODES ONLY) --- */}
+        {/* --- INSPECTOR LENS (Centralized Hover HUD) --- */}
         <div className={cn(
             "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 ease-out transform",
             activeHover ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 scale-95"
         )}>
-            {activeHover && activeHover.type === 'code' && (
-                <div className="bg-zinc-950/90 backdrop-blur-xl border border-zinc-800 rounded-xl shadow-2xl p-0 w-[500px] overflow-hidden flex flex-col pointer-events-auto ring-1 ring-white/10">
-                    <div className="h-1 w-full" style={{ backgroundColor: activeHover.data.color }} />
-                    <div className="p-4 flex gap-4">
-                        <div className="shrink-0 flex flex-col items-center gap-2">
-                            <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 bg-zinc-900/50 shadow-inner">
-                                {activeHover.data.kind === 'category' ? 
-                                    <FolderTree size={24} style={{ color: activeHover.data.color }} /> : 
-                                    <Tag size={24} style={{ color: activeHover.data.color }} />
-                                }
-                            </div>
-                            {activeHover.data.isCore && <Badge className="text-[9px] h-4 bg-yellow-500/20 text-yellow-500 border-yellow-500/30">CORE</Badge>}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                            {activeHover.relatedData.parentCode && (
-                                <div className="flex items-center gap-1 text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
-                                    <FolderTree size={10} /> 
-                                    {activeHover.relatedData.parentCode.name}
-                                    <ChevronRight size={10} />
+            {activeHover && (
+                <div className={cn(
+                    "bg-zinc-950/90 backdrop-blur-xl border rounded-xl shadow-2xl p-0 w-[500px] overflow-hidden flex flex-col pointer-events-auto ring-1 ring-white/10",
+                    activeHover.type === 'code' ? "border-zinc-800" : "border-amber-900/50"
+                )}>
+                    <div className="h-1 w-full" style={{ backgroundColor: activeHover.type === 'code' ? (activeHover.data as Code).color : '#f59e0b' }} />
+                    
+                    {/* CODE LENS */}
+                    {activeHover.type === 'code' && (
+                        <div className="p-4 flex gap-4">
+                            <div className="shrink-0 flex flex-col items-center gap-2">
+                                <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 bg-zinc-900/50 shadow-inner">
+                                    {(activeHover.data as Code).kind === 'category' ? 
+                                        <FolderTree size={24} style={{ color: (activeHover.data as Code).color }} /> : 
+                                        <Tag size={24} style={{ color: (activeHover.data as Code).color }} />
+                                    }
                                 </div>
-                            )}
-                            <h3 className="font-bold text-lg text-zinc-100 leading-none">{activeHover.data.name}</h3>
-                            <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
-                                {activeHover.data.description || "No definition provided."}
-                            </p>
-                        </div>
-                        <div className="shrink-0 flex flex-col items-end justify-between border-l border-zinc-800 pl-4 py-1">
-                            <div className="text-center">
-                                <div className="text-xl font-mono font-bold text-zinc-200">{activeHover.relatedData.usageCount}</div>
-                                <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Refs</div>
+                                {(activeHover.data as Code).isCore && <Badge className="text-[9px] h-4 bg-yellow-500/20 text-yellow-500 border-yellow-500/30">CORE</Badge>}
                             </div>
-                            <div className="flex -space-x-1.5 mt-2">
-                                {activeHover.relatedData.contributors.length > 0 ? activeHover.relatedData.contributors.map((r: Researcher) => (
-                                    <Avatar key={r.id} className="h-5 w-5 border border-zinc-900 ring-1 ring-zinc-800">
-                                        <AvatarFallback style={{ backgroundColor: r.color, color: 'white', fontSize: '8px' }}>{r.initials}</AvatarFallback>
-                                    </Avatar>
-                                )) : <span className="text-[10px] text-zinc-600">-</span>}
+                            <div className="flex-1 space-y-1">
+                                {activeHover.relatedData.parentCode && (
+                                    <div className="flex items-center gap-1 text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                                        <FolderTree size={10} /> 
+                                        {activeHover.relatedData.parentCode.name}
+                                        <ChevronRight size={10} />
+                                    </div>
+                                )}
+                                <h3 className="font-bold text-lg text-zinc-100 leading-none">{(activeHover.data as Code).name}</h3>
+                                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                    {(activeHover.data as Code).description || "No definition provided."}
+                                </p>
+                            </div>
+                            <div className="shrink-0 flex flex-col items-end justify-between border-l border-zinc-800 pl-4 py-1">
+                                <div className="text-center">
+                                    <div className="text-xl font-mono font-bold text-zinc-200">{activeHover.relatedData.usageCount}</div>
+                                    <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Refs</div>
+                                </div>
+                                <div className="flex -space-x-1.5 mt-2">
+                                    {activeHover.relatedData.contributors.length > 0 ? activeHover.relatedData.contributors.map((r: Researcher) => (
+                                        <Avatar key={r.id} className="h-5 w-5 border border-zinc-900 ring-1 ring-zinc-800">
+                                            <AvatarFallback style={{ backgroundColor: r.color, color: 'white', fontSize: '8px' }}>{r.initials}</AvatarFallback>
+                                        </Avatar>
+                                    )) : <span className="text-[10px] text-zinc-600">-</span>}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* MEMO LENS */}
+                    {activeHover.type === 'memo' && (
+                        <div className="p-4 flex gap-4">
+                            <div className="shrink-0 flex flex-col items-center gap-2">
+                                <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-amber-900/30 bg-amber-950/20 shadow-inner">
+                                    <StickyNote size={24} className="text-amber-500" />
+                                </div>
+                                <Badge variant="outline" className="text-[9px] h-4 border-amber-900/50 text-amber-500">
+                                    #{(activeHover.data as Memo).number}
+                                </Badge>
+                            </div>
+                            <div className="flex-1 space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
+                                        {(activeHover.data as Memo).type} Memo
+                                    </span>
+                                    <span className="text-[10px] text-zinc-600">
+                                        {new Date((activeHover.data as Memo).createdAt).toLocaleDateString()}
+                                    </span>
+                                </div>
+                                <h3 className="font-bold text-sm text-zinc-200 leading-snug italic">"{(activeHover.data as Memo).content}"</h3>
+                                <div className="pt-2 flex justify-end">
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => handleEditMemoClick(activeHover.data as Memo)} 
+                                        className="h-6 text-[10px] gap-1 hover:text-white border-zinc-800"
+                                    >
+                                        <Edit2 size={10} /> Edit
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="shrink-0 flex flex-col items-end border-l border-zinc-800 pl-4 py-1">
+                                {activeHover.relatedData.author ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                        <Avatar className="h-8 w-8 border border-zinc-900 ring-1 ring-zinc-800">
+                                            <AvatarFallback style={{ backgroundColor: activeHover.relatedData.author.color, color: 'white', fontSize: '10px' }}>
+                                                {activeHover.relatedData.author.initials}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <span className="text-[9px] text-zinc-500">{activeHover.relatedData.author.name.split(' ')[0]}</span>
+                                    </div>
+                                ) : <User size={16} className="text-zinc-600"/>}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -507,41 +570,20 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                 className="group flex hover:bg-black/5"
                                 data-para-index={index}
                             >
-                                {/* 1. Gutter: Line Number & Memos (WITH HOVER CARD RESTORED) */}
+                                {/* 1. Gutter: Line Number & Memos (UPDATED TO USE LENS) */}
                                 <div className="w-12 flex-shrink-0 bg-[#1e1e1e] border-r border-zinc-800 flex flex-col items-center pt-2 gap-2 select-none">
                                     <span className="text-[10px] text-zinc-600 font-mono">{para.id}</span>
                                     {paraMemos.length > 0 && layersVisible[LayerType.THEORY_MEMOS] && (
-                                        <div className="relative group/memo">
-                                            <HoverCard openDelay={100} closeDelay={100}>
-                                                <HoverCardTrigger asChild>
-                                                    <button 
-                                                        onClick={() => handleEditMemoClick(paraMemos[0])}
-                                                        className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center"
-                                                        ref={el => { memoRefs.current[paraMemos[0].id] = el }}
-                                                    >
-                                                        <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500")}/>
-                                                        <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
-                                                    </button>
-                                                </HoverCardTrigger>
-                                                <HoverCardContent side="right" align="start" className="w-64 z-50 bg-zinc-950 border-zinc-800 p-0 overflow-hidden">
-                                                    <div className="h-1 bg-amber-500 w-full" />
-                                                    <div className="p-3 space-y-2">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="font-bold text-xs text-zinc-300">Annotation #{paraMemos[0].number}</span>
-                                                            <span className="text-[10px] text-zinc-500">{new Date(paraMemos[0].createdAt).toLocaleDateString()}</span>
-                                                        </div>
-                                                        <p className="text-xs text-zinc-400 italic bg-zinc-900/50 p-2 rounded border border-zinc-800/50">
-                                                            {paraMemos[0].content}
-                                                        </p>
-                                                        <div className="flex justify-end pt-1">
-                                                            <Button size="xs" variant="ghost" onClick={() => handleEditMemoClick(paraMemos[0])} className="h-6 text-[10px] gap-1 hover:text-white">
-                                                                <Edit2 size={10} /> Edit
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </HoverCardContent>
-                                            </HoverCard>
-                                        </div>
+                                        <button 
+                                            onClick={() => handleEditMemoClick(paraMemos[0])}
+                                            className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center group/icon"
+                                            ref={el => { memoRefs.current[paraMemos[0].id] = el }}
+                                            onMouseEnter={() => handleMemoHover(paraMemos[0])}
+                                            onMouseLeave={clearHover}
+                                        >
+                                            <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer transition-colors", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500 group-hover/icon:text-amber-400")}/>
+                                            <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
+                                        </button>
                                     )}
                                 </div>
 
@@ -576,6 +618,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         researchTeam={researchTeam}
                                         layersVisible={layersVisible}
                                         onHoverCode={handleCodeHover}
+                                        onHoverMemo={handleMemoHover}
                                         onEditMemo={handleEditMemoClick}
                                         onLeaveHover={clearHover}
                                     />
@@ -607,9 +650,10 @@ const HighlightedText: React.FC<{
     researchTeam?: ResearchTeam;
     layersVisible: Record<LayerType, boolean>;
     onHoverCode: (code: Code) => void;
+    onHoverMemo: (memo: Memo) => void;
     onEditMemo: (memo: Memo) => void;
     onLeaveHover: () => void;
-}> = ({ text, paraStart, codings, codes, allCodings, memos = [], researchTeam, layersVisible, onHoverCode, onEditMemo, onLeaveHover }) => {
+}> = ({ text, paraStart, codings, codes, allCodings, memos = [], researchTeam, layersVisible, onHoverCode, onHoverMemo, onEditMemo, onLeaveHover }) => {
     
     // If no layers active, just return text
     if (codings.length === 0 && memos.length === 0) return <>{text}</>;
@@ -661,10 +705,27 @@ const HighlightedText: React.FC<{
 
         const allActiveMemos = [...activeMemosForSegment, ...legacyMemos];
 
-        // 1. Base Content
+        // 1. Base Content with optional memo highlight
         let content = <>{segText}</>;
+        
+        if (allActiveMemos.length > 0) {
+             const primaryMemo = allActiveMemos[0];
+             // Memos highlight the text itself in amber
+             content = (
+                <span 
+                    className="bg-amber-500/20 rounded-sm px-0.5 cursor-pointer hover:bg-amber-500/40 transition-colors"
+                    onMouseEnter={() => onHoverMemo(primaryMemo)}
+                    onMouseLeave={onLeaveHover}
+                    onClick={() => onEditMemo(primaryMemo)}
+                >
+                    {segText}
+                </span>
+             );
+        } else {
+             content = <span key={i}>{segText}</span>;
+        }
 
-        // 2. Apply Code Highlighting (Underline/Color)
+        // 2. Apply Code Highlighting (Underline/Color) overrides content if coding exists
         const showOpenCodes = layersVisible[LayerType.OPEN_CODING];
         const showCategories = layersVisible[LayerType.CATEGORIES];
 
@@ -681,6 +742,9 @@ const HighlightedText: React.FC<{
 
             if (codeRef) {
                 const codeToHover = codeRef;
+                // If there's also a memo, we wrap the code span or handle double hover?
+                // Simplified: Coding style takes precedence for visual, but we can't easily merge behaviors on one span without complex nesting.
+                // We keep the coding underline. If there is a memo, we rely on the superscript icon or specific memo-only segments.
                 content = (
                     <span 
                         key={`code-${i}`}
@@ -696,13 +760,9 @@ const HighlightedText: React.FC<{
                     </span>
                 );
             }
-        } else if (allActiveMemos.length > 0) {
-             content = <span className="bg-amber-500/20 rounded-sm px-0.5">{segText}</span>;
-        } else {
-            content = <span key={i}>{segText}</span>;
         }
 
-        // 3. Apply Memo Highlighting & Icon (WITH HOVER CARD)
+        // 3. Apply Memo Icon (Superscript) - UPDATED TO USE LENS
         if (allActiveMemos.length > 0) {
             const endingMemos = allActiveMemos.filter(m => 
                 (m.segment && Math.min(text.length, m.segment.end - paraStart) === segEnd) ||
@@ -712,29 +772,31 @@ const HighlightedText: React.FC<{
             if (endingMemos.length > 0) {
                 const primaryMemo = endingMemos[0];
                  segments.push(
-                    <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10")}>
-                        {content}
+                    <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10 rounded")}>
+                        {activeForSegment.length === 0 ? 
+                            <span 
+                                className="cursor-help"
+                                onMouseEnter={() => onHoverMemo(primaryMemo)}
+                                onMouseLeave={onLeaveHover}
+                            >
+                                {segText}
+                            </span> 
+                            : content}
                         <sup className="ml-0.5 inline-flex">
-                             <HoverCard openDelay={0}>
-                                <HoverCardTrigger asChild>
-                                    <span 
-                                        className="flex items-center justify-center bg-amber-500 text-black text-[8px] font-bold rounded-sm h-3 px-0.5 cursor-help"
-                                    >
-                                        #{primaryMemo.number}
-                                    </span>
-                                </HoverCardTrigger>
-                                <HoverCardContent side="top" className="w-64 bg-zinc-950 border-zinc-800 p-3">
-                                    <div className="text-xs font-bold text-zinc-300 mb-1">Annotation #{primaryMemo.number}</div>
-                                    <div className="text-xs text-zinc-400 italic mb-2">"{primaryMemo.content}"</div>
-                                    <Button size="xs" variant="outline" className="w-full h-6 text-[10px]" onClick={() => onEditMemo(primaryMemo)}>Edit Note</Button>
-                                </HoverCardContent>
-                             </HoverCard>
+                            <span 
+                                className="flex items-center justify-center bg-amber-500 text-black text-[8px] font-bold rounded-sm h-3 px-0.5 cursor-help hover:bg-amber-400 transition-colors"
+                                onMouseEnter={() => onHoverMemo(primaryMemo)}
+                                onMouseLeave={onLeaveHover}
+                                onClick={() => onEditMemo(primaryMemo)}
+                            >
+                                #{primaryMemo.number}
+                            </span>
                         </sup>
                     </span>
                 )
             } else {
                  segments.push(
-                    <span key={`seg-${i}`} className={cn(activeForSegment.length === 0 && "bg-amber-500/10")}>
+                    <span key={`seg-${i}`} className={cn(activeForSegment.length === 0 && "")}>
                         {content}
                     </span>
                  );
