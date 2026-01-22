@@ -8,6 +8,7 @@ import { CurationWorkflow } from './components/CurationWorkflow';
 import { MemoDirectory } from './components/MemoDirectory'; 
 import { SettingsDialog } from './components/SettingsDialog'; 
 import { Visualizations } from './components/Visualizations'; 
+import { ReportView } from './components/ReportView'; // Import ReportView
 import { OntologyManager } from './components/OntologyManager'; 
 import { suggestOntology } from './services/geminiService'; 
 import { exportOntologyToOwl, parseOwlToCodes } from './lib/owlUtils'; 
@@ -309,10 +310,15 @@ export default function App() {
   };
 
   const handleCreateArtifact = () => {
+      const defaultName = `New Import ${Date.now().toString().slice(-4)}`;
+      const name = prompt("Enter artifact name:", defaultName);
+      
+      if (name === null) return; // User cancelled
+
       const newArt: Artifact = {
           id: `a-${Date.now()}`,
           hashID: Math.random().toString(36).substring(2),
-          name: `New Import ${Date.now().toString().slice(-4)}`,
+          name: name.trim() || defaultName,
           type: 'document',
           media: 'text',
           access: 'private',
@@ -327,7 +333,7 @@ export default function App() {
           }
       };
       setArtifacts(prev => [...prev, newArt]);
-      addJournalEntry(`Received new artifact into Data Acquisition`, 'auto');
+      addJournalEntry(`Received new artifact into Data Acquisition: ${newArt.name}`, 'auto');
   };
 
   const handleAddCoding = (coding: Omit<Coding, 'id'>) => {
@@ -604,6 +610,7 @@ export default function App() {
                  <TabsTrigger value="analyze" className="px-6">2. Text Analysis</TabsTrigger>
                  <TabsTrigger value="memos" className="px-6">3. Theory Builder</TabsTrigger>
                  <TabsTrigger value="visualize" className="px-6">4. Visual Analytics</TabsTrigger>
+                 <TabsTrigger value="report" className="px-6">5. Report</TabsTrigger>
              </TabsList>
              
              <div className="text-xs text-zinc-500 font-mono flex items-center gap-2">
@@ -712,6 +719,17 @@ export default function App() {
                         codings={codings} 
                         artifacts={artifacts} 
                         settings={projectSettings} 
+                    />
+                </TabsContent>
+
+                {/* 5. REPORT */}
+                <TabsContent value="report" className="flex-1 h-full mt-0 data-[state=inactive]:hidden">
+                    <ReportView 
+                        settings={projectSettings}
+                        memos={memos}
+                        codes={codes}
+                        artifacts={artifacts}
+                        onUpdateSettings={setProjectSettings}
                     />
                 </TabsContent>
 
