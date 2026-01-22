@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, GripVertical, AlertTriangle, Save, X, Search, Plus, Tag, Hash, CalendarDays, Activity, Command as CommandIcon, ArrowRight, Quote, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User, CornerDownRight, FileText, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './ui/hover-card';
@@ -11,6 +11,9 @@ import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { ConsensusPanel } from './ConsensusPanel';
 import { ArtifactPropertiesPanel } from './ArtifactPropertiesPanel';
+import { Textarea } from './ui/textarea';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface ArtifactViewProps {
   artifact: Artifact;
@@ -39,6 +42,8 @@ interface HoverState {
     type: 'code' | 'memo';
     data: Code | Memo;
     relatedData?: any; 
+    isPinned?: boolean;
+    isEditing?: boolean;
 }
 
 export const ArtifactView: React.FC<ArtifactViewProps> = ({ 
@@ -55,6 +60,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   onCreateCode,
   onAddMemo,
   onEditMemo,
+  onUpdateMemo,
   highlightedMemoId,
   selectedCodeId,
   onClearSelection,
@@ -68,19 +74,46 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const [showMemoInput, setShowMemoInput] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'coding' | 'reader'>('coding');
   
   // Centralized Hover State (Lens)
   const [activeHover, setActiveHover] = useState<HoverState | null>(null);
+  const [editContent, setEditContent] = useState(''); // Local state for editing memo in Lens
 
   const containerRef = useRef<HTMLDivElement>(null);
   const memoRefs = useRef<Record<string, HTMLElement | null>>({});
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Scroll to memo if highlighted
+  // Markdown rendering state
+  const [renderedHtml, setRenderedHtml] = useState('');
+
   useEffect(() => {
-    if (highlightedMemoId && memoRefs.current[highlightedMemoId]) {
-      memoRefs.current[highlightedMemoId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (viewMode === 'reader') {
+          const parse = async () => {
+              const html = await marked.parse(artifact.content);
+              setRenderedHtml(DOMPurify.sanitize(html));
+          };
+          parse();
+      }
+  }, [viewMode, artifact.content]);
+
+  // Scroll to memo if highlighted (from prop)
+  useEffect(() => {
+    if (highlightedMemoId && viewMode === 'coding') {
+       scrollToMemo(highlightedMemoId);
     }
-  }, [highlightedMemoId]);
+  }, [highlightedMemoId, viewMode]);
+
+  const scrollToMemo = (id: string) => {
+      // First try to find the segment span
+      const segmentEl = document.getElementById(`memo-segment-${id}`);
+      if (segmentEl) {
+          segmentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (memoRefs.current[id]) {
+          // Fallback to gutter icon
+          memoRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+  };
 
   // --- Data Preparation ---
 
@@ -113,6 +146,9 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
   // --- Hover Logic ---
   const handleCodeHover = (code: Code) => {
+      if (activeHover?.isPinned) return;
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+
       const childIds = codes.filter(c => c.parentId === code.id).map(c => c.id);
       const relevantCodings = codings.filter(c => c.codeId === code.id || childIds.includes(c.codeId));
       const usageCount = relevantCodings.length;
@@ -131,6 +167,11 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   };
 
   const handleMemoHover = (memo: Memo) => {
+      if (activeHover?.isPinned && activeHover.data.id === memo.id) return; // Already pinned on this
+      if (activeHover?.isPinned) return; // Don't override other pin
+      
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+
       const author = researchTeam?.researchers.find(r => r.id === memo.authorId);
       setActiveHover({
           type: 'memo',
@@ -139,13 +180,63 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
       });
   };
 
-  const clearHover = () => {
+  const handleLeaveHover = () => {
+      if (activeHover?.isPinned) return;
+      hoverTimeoutRef.current = setTimeout(() => {
+          setActiveHover(null);
+      }, 400); // Delay to allow moving to lens
+  };
+
+  const handleLensEnter = () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+  };
+
+  const handleLensLeave = () => {
+      if (activeHover?.isPinned) return;
+      hoverTimeoutRef.current = setTimeout(() => {
+          setActiveHover(null);
+      }, 400);
+  };
+
+  const handleMemoClick = (memo: Memo) => {
+      // Pin the memo and scroll to it
+      const author = researchTeam?.researchers.find(r => r.id === memo.authorId);
+      setActiveHover({
+          type: 'memo',
+          data: memo,
+          relatedData: { author },
+          isPinned: true
+      });
+      scrollToMemo(memo.id);
+  };
+
+  const handleCloseLens = () => {
       setActiveHover(null);
+  };
+
+  const startEditing = () => {
+      if (activeHover?.type === 'memo') {
+          setEditContent((activeHover.data as Memo).content);
+          setActiveHover(prev => prev ? { ...prev, isEditing: true, isPinned: true } : null);
+      }
+  };
+
+  const saveEditing = () => {
+      if (activeHover?.type === 'memo' && onUpdateMemo) {
+          onUpdateMemo((activeHover.data as Memo).id, editContent);
+          setActiveHover(prev => prev ? { ...prev, isEditing: false, data: { ...prev.data, content: editContent } as Memo } : null);
+      }
+  };
+
+  const cancelEditing = () => {
+      setActiveHover(prev => prev ? { ...prev, isEditing: false } : null);
   };
 
   // --- Selection Logic ---
 
   const handleMouseUp = () => {
+    if (viewMode === 'reader') return; // Disable coding in reader mode for now
+
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
         return;
@@ -237,10 +328,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     clearSelection();
   };
 
-  const handleEditMemoClick = (memo: Memo) => {
-    if (onEditMemo) onEditMemo(memo);
-  };
-
   return (
     <div className="relative h-full flex flex-col bg-[#1e1e1e]" ref={containerRef}>
         
@@ -268,15 +355,24 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         )}
 
         {/* --- INSPECTOR LENS (Centralized Hover HUD) --- */}
-        <div className={cn(
-            "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 ease-out transform",
-            activeHover ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 scale-95"
-        )}>
+        <div 
+            className={cn(
+                "fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ease-out transform",
+                activeHover ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 scale-95 pointer-events-none"
+            )}
+            onMouseEnter={handleLensEnter}
+            onMouseLeave={handleLensLeave}
+        >
             {activeHover && (
                 <div className={cn(
-                    "bg-zinc-950/90 backdrop-blur-xl border rounded-xl shadow-2xl p-0 w-[500px] overflow-hidden flex flex-col pointer-events-auto ring-1 ring-white/10",
+                    "bg-zinc-950/90 backdrop-blur-xl border rounded-xl shadow-2xl p-0 w-[500px] overflow-hidden flex flex-col ring-1 ring-white/10 relative",
                     activeHover.type === 'code' ? "border-zinc-800" : "border-amber-900/50"
                 )}>
+                    {activeHover.isPinned && (
+                        <button onClick={handleCloseLens} className="absolute top-2 right-2 text-zinc-500 hover:text-white z-10 p-1 bg-black/20 rounded-full">
+                            <X size={12} />
+                        </button>
+                    )}
                     <div className="h-1 w-full" style={{ backgroundColor: activeHover.type === 'code' ? (activeHover.data as Code).color : '#f59e0b' }} />
                     
                     {/* CODE LENS */}
@@ -331,7 +427,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                     #{(activeHover.data as Memo).number}
                                 </Badge>
                             </div>
-                            <div className="flex-1 space-y-1">
+                            <div className="flex-1 space-y-2">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
                                         {(activeHover.data as Memo).type} Memo
@@ -340,17 +436,37 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         {new Date((activeHover.data as Memo).createdAt).toLocaleDateString()}
                                     </span>
                                 </div>
-                                <h3 className="font-bold text-sm text-zinc-200 leading-snug italic">"{(activeHover.data as Memo).content}"</h3>
-                                <div className="pt-2 flex justify-end">
-                                    <Button 
-                                        size="xs" 
-                                        variant="outline" 
-                                        onClick={() => handleEditMemoClick(activeHover.data as Memo)} 
-                                        className="h-6 text-[10px] gap-1 hover:text-white border-zinc-800"
-                                    >
-                                        <Edit2 size={10} /> Edit
-                                    </Button>
-                                </div>
+                                
+                                {activeHover.isEditing ? (
+                                    <div className="space-y-2 animate-in fade-in">
+                                        <Textarea 
+                                            value={editContent}
+                                            onChange={(e) => setEditContent(e.target.value)}
+                                            className="min-h-[80px] bg-black/20 text-xs border-amber-500/50 focus-visible:ring-amber-500"
+                                            autoFocus
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                            <Button size="xs" variant="ghost" onClick={cancelEditing} className="h-6">Cancel</Button>
+                                            <Button size="xs" variant="brand" onClick={saveEditing} className="h-6 bg-amber-600 hover:bg-amber-700">Save</Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <h3 className="font-bold text-sm text-zinc-200 leading-snug italic cursor-text hover:text-white transition-colors" onClick={startEditing}>
+                                            "{(activeHover.data as Memo).content}"
+                                        </h3>
+                                        <div className="flex justify-end">
+                                            <Button 
+                                                size="xs" 
+                                                variant="outline" 
+                                                onClick={startEditing} 
+                                                className="h-6 text-[10px] gap-1 hover:text-white border-zinc-800"
+                                            >
+                                                <Edit2 size={10} /> Edit
+                                            </Button>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             <div className="shrink-0 flex flex-col items-end border-l border-zinc-800 pl-4 py-1">
                                 {activeHover.relatedData.author ? (
@@ -371,7 +487,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         </div>
 
         {/* Helper Toolbar (Floating) for New Selection */}
-        {selection && (
+        {selection && viewMode === 'coding' && (
             <div 
                 className="fixed z-50 bg-zinc-950 border border-zinc-700 shadow-2xl rounded-lg w-[340px] animate-in fade-in zoom-in-95 flex flex-col overflow-hidden"
                 style={{ 
@@ -501,6 +617,22 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                 </button>
                             </Badge>
                         )}
+                        
+                        {/* View Mode Toggle */}
+                        <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded p-0.5 ml-4">
+                            <button 
+                                onClick={() => setViewMode('coding')}
+                                className={cn("flex items-center gap-2 px-3 py-1 text-xs rounded transition-colors", viewMode === 'coding' ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300")}
+                            >
+                                <FileText size={12} /> Analyze
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('reader')}
+                                className={cn("flex items-center gap-2 px-3 py-1 text-xs rounded transition-colors", viewMode === 'reader' ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-zinc-300")}
+                            >
+                                <Eye size={12} /> Reader Mode
+                            </button>
+                        </div>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-zinc-500">
                         <Button
@@ -527,105 +659,112 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
                 {/* Content Area */}
                 <div className="max-w-5xl mx-auto mt-6 bg-[#252526] shadow-2xl border border-zinc-800 min-h-[800px]">
-                    {paragraphs.map((para, index) => {
-                        const paraCodings = activeCodings.filter(c => 
-                            c.start < para.end && c.end > para.start
-                        );
-                        
-                        const paraMemos = memos.filter(m => 
-                           m.relatedIds.includes(artifact.id) && (
-                               (m.segment && m.segment.start < para.end && m.segment.end > para.start) ||
-                               (!m.segment && m.type === 'observational' && para.text.includes(m.title))
-                           )
-                        );
+                    
+                    {viewMode === 'reader' ? (
+                        <div className="p-8 prose prose-invert prose-zinc max-w-none">
+                            <div dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+                        </div>
+                    ) : (
+                        paragraphs.map((para, index) => {
+                            const paraCodings = activeCodings.filter(c => 
+                                c.start < para.end && c.end > para.start
+                            );
+                            
+                            const paraMemos = memos.filter(m => 
+                            m.relatedIds.includes(artifact.id) && (
+                                (m.segment && m.segment.start < para.end && m.segment.end > para.start) ||
+                                (!m.segment && m.type === 'observational' && para.text.includes(m.title))
+                            )
+                            );
 
-                        const stripesToRender: { code: Code, isCategoryAgg: boolean }[] = [];
+                            const stripesToRender: { code: Code, isCategoryAgg: boolean }[] = [];
 
-                        if (layersVisible[LayerType.OPEN_CODING]) {
-                             const uniqueCodesInPara = Array.from(new Set(paraCodings.map(c => c.codeId)))
-                                .map(id => codes.find(c => c.id === id))
-                                .filter(Boolean) as Code[];
-                             uniqueCodesInPara.forEach(c => stripesToRender.push({ code: c, isCategoryAgg: false }));
-                        }
+                            if (layersVisible[LayerType.OPEN_CODING]) {
+                                const uniqueCodesInPara = Array.from(new Set(paraCodings.map(c => c.codeId)))
+                                    .map(id => codes.find(c => c.id === id))
+                                    .filter(Boolean) as Code[];
+                                uniqueCodesInPara.forEach(c => stripesToRender.push({ code: c, isCategoryAgg: false }));
+                            }
 
-                        if (layersVisible[LayerType.CATEGORIES]) {
-                            const parents = new Set<string>();
-                            paraCodings.forEach(c => {
-                                const code = codes.find(x => x.id === c.codeId);
-                                if (code && code.parentId) parents.add(code.parentId);
-                                if (code && code.kind === 'category') parents.add(code.id);
-                            });
+                            if (layersVisible[LayerType.CATEGORIES]) {
+                                const parents = new Set<string>();
+                                paraCodings.forEach(c => {
+                                    const code = codes.find(x => x.id === c.codeId);
+                                    if (code && code.parentId) parents.add(code.parentId);
+                                    if (code && code.kind === 'category') parents.add(code.id);
+                                });
 
-                            parents.forEach(pid => {
-                                const cat = codes.find(x => x.id === pid);
-                                if (cat) stripesToRender.push({ code: cat, isCategoryAgg: true });
-                            });
-                        }
+                                parents.forEach(pid => {
+                                    const cat = codes.find(x => x.id === pid);
+                                    if (cat) stripesToRender.push({ code: cat, isCategoryAgg: true });
+                                });
+                            }
 
-                        const uniqueStripes = stripesToRender.filter((v,i,a) => a.findIndex(t => t.code.id === v.code.id) === i);
+                            const uniqueStripes = stripesToRender.filter((v,i,a) => a.findIndex(t => t.code.id === v.code.id) === i);
 
-                        return (
-                            <div 
-                                key={para.id} 
-                                className="group flex hover:bg-black/5"
-                                data-para-index={index}
-                            >
-                                {/* 1. Gutter: Line Number & Memos (UPDATED TO USE LENS) */}
-                                <div className="w-12 flex-shrink-0 bg-[#1e1e1e] border-r border-zinc-800 flex flex-col items-center pt-2 gap-2 select-none">
-                                    <span className="text-[10px] text-zinc-600 font-mono">{para.id}</span>
-                                    {paraMemos.length > 0 && layersVisible[LayerType.THEORY_MEMOS] && (
-                                        <button 
-                                            onClick={() => handleEditMemoClick(paraMemos[0])}
-                                            className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center group/icon"
-                                            ref={el => { memoRefs.current[paraMemos[0].id] = el }}
-                                            onMouseEnter={() => handleMemoHover(paraMemos[0])}
-                                            onMouseLeave={clearHover}
-                                        >
-                                            <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer transition-colors", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500 group-hover/icon:text-amber-400")}/>
-                                            <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
-                                        </button>
-                                    )}
-                                </div>
+                            return (
+                                <div 
+                                    key={para.id} 
+                                    className="group flex hover:bg-black/5"
+                                    data-para-index={index}
+                                >
+                                    {/* 1. Gutter: Line Number & Memos (UPDATED TO USE LENS) */}
+                                    <div className="w-12 flex-shrink-0 bg-[#1e1e1e] border-r border-zinc-800 flex flex-col items-center pt-2 gap-2 select-none">
+                                        <span className="text-[10px] text-zinc-600 font-mono">{para.id}</span>
+                                        {paraMemos.length > 0 && layersVisible[LayerType.THEORY_MEMOS] && (
+                                            <button 
+                                                onClick={() => handleMemoClick(paraMemos[0])}
+                                                className="hover:scale-110 transition-transform focus:outline-none flex flex-col items-center group/icon"
+                                                ref={el => { memoRefs.current[paraMemos[0].id] = el }}
+                                                onMouseEnter={() => handleMemoHover(paraMemos[0])}
+                                                onMouseLeave={handleLeaveHover}
+                                            >
+                                                <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer transition-colors", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500 group-hover/icon:text-amber-400")}/>
+                                                <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
+                                            </button>
+                                        )}
+                                    </div>
 
-                                {/* 2. Coding Stripes Margin */}
-                                <div className="w-6 border-r border-zinc-800 bg-[#2d2d2d] flex flex-row relative select-none">
-                                    {uniqueStripes.map(({ code, isCategoryAgg }) => (
-                                        <div 
-                                            key={code.id}
-                                            className={cn(
-                                                "flex-1 h-full hover:brightness-125 transition-all cursor-help relative",
-                                                isCategoryAgg ? "w-3" : "w-1"
-                                            )}
-                                            style={{ 
-                                                backgroundColor: code.color,
-                                                opacity: isCategoryAgg ? 0.8 : 1
-                                            }}
-                                            onMouseEnter={() => handleCodeHover(code)}
-                                            onMouseLeave={clearHover}
+                                    {/* 2. Coding Stripes Margin */}
+                                    <div className="w-6 border-r border-zinc-800 bg-[#2d2d2d] flex flex-row relative select-none">
+                                        {uniqueStripes.map(({ code, isCategoryAgg }) => (
+                                            <div 
+                                                key={code.id}
+                                                className={cn(
+                                                    "flex-1 h-full hover:brightness-125 transition-all cursor-help relative",
+                                                    isCategoryAgg ? "w-3" : "w-1"
+                                                )}
+                                                style={{ 
+                                                    backgroundColor: code.color,
+                                                    opacity: isCategoryAgg ? 0.8 : 1
+                                                }}
+                                                onMouseEnter={() => handleCodeHover(code)}
+                                                onMouseLeave={handleLeaveHover}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {/* 3. Text Content */}
+                                    <div className="flex-1 px-8 py-2 font-serif text-lg text-zinc-300 leading-relaxed relative selection:bg-blue-500/30">
+                                        <HighlightedText 
+                                            text={para.text}
+                                            paraStart={para.start}
+                                            codings={paraCodings}
+                                            codes={codes}
+                                            allCodings={codings}
+                                            memos={paraMemos}
+                                            researchTeam={researchTeam}
+                                            layersVisible={layersVisible}
+                                            onHoverCode={handleCodeHover}
+                                            onHoverMemo={handleMemoHover}
+                                            onEditMemo={handleMemoClick}
+                                            onLeaveHover={handleLeaveHover}
                                         />
-                                    ))}
+                                    </div>
                                 </div>
-
-                                {/* 3. Text Content */}
-                                <div className="flex-1 px-8 py-2 font-serif text-lg text-zinc-300 leading-relaxed relative selection:bg-blue-500/30">
-                                    <HighlightedText 
-                                        text={para.text}
-                                        paraStart={para.start}
-                                        codings={paraCodings}
-                                        codes={codes}
-                                        allCodings={codings}
-                                        memos={paraMemos}
-                                        researchTeam={researchTeam}
-                                        layersVisible={layersVisible}
-                                        onHoverCode={handleCodeHover}
-                                        onHoverMemo={handleMemoHover}
-                                        onEditMemo={handleEditMemoClick}
-                                        onLeaveHover={clearHover}
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })
+                    )}
                     
                     {/* End padding */}
                     <div className="h-32 bg-[#1e1e1e] border-t border-zinc-800 flex items-center justify-center text-zinc-700 text-sm">
@@ -638,8 +777,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   );
 };
 
-// --- Helper Component for Inline Highlights ---
-
+// ... Helper Component for Inline Highlights (same as before) ...
 const HighlightedText: React.FC<{
     text: string;
     paraStart: number;
@@ -713,6 +851,7 @@ const HighlightedText: React.FC<{
              // Memos highlight the text itself in amber
              content = (
                 <span 
+                    id={`memo-segment-${primaryMemo.id}`}
                     className="bg-amber-500/20 rounded-sm px-0.5 cursor-pointer hover:bg-amber-500/40 transition-colors"
                     onMouseEnter={() => onHoverMemo(primaryMemo)}
                     onMouseLeave={onLeaveHover}
@@ -742,9 +881,6 @@ const HighlightedText: React.FC<{
 
             if (codeRef) {
                 const codeToHover = codeRef;
-                // If there's also a memo, we wrap the code span or handle double hover?
-                // Simplified: Coding style takes precedence for visual, but we can't easily merge behaviors on one span without complex nesting.
-                // We keep the coding underline. If there is a memo, we rely on the superscript icon or specific memo-only segments.
                 content = (
                     <span 
                         key={`code-${i}`}
@@ -756,7 +892,7 @@ const HighlightedText: React.FC<{
                         onMouseEnter={() => onHoverCode(codeToHover)}
                         onMouseLeave={onLeaveHover}
                     >
-                        {segText}
+                        {content}
                     </span>
                 );
             }
@@ -775,9 +911,11 @@ const HighlightedText: React.FC<{
                     <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10 rounded")}>
                         {activeForSegment.length === 0 ? 
                             <span 
+                                id={`memo-segment-${primaryMemo.id}`}
                                 className="cursor-help"
                                 onMouseEnter={() => onHoverMemo(primaryMemo)}
                                 onMouseLeave={onLeaveHover}
+                                onClick={() => onEditMemo(primaryMemo)}
                             >
                                 {segText}
                             </span> 
