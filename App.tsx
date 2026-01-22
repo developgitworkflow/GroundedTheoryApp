@@ -127,6 +127,13 @@ const INITIAL_SETTINGS: ProjectSettings = {
           { id: 't1', name: 'Stratum CAQDAS', version: '1.0.0', referenceURL: 'https://stratum.app' }
       ],
       bibliographyContent: 'Charmaz, K. (2006). Constructing Grounded Theory.\nGlaser, B. G., & Strauss, A. L. (1967). The Discovery of Grounded Theory.'
+  },
+  structuredAbstract: {
+      background: '',
+      methods: '',
+      results: '',
+      conclusion: '',
+      keywords: ''
   }
 };
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool, Memo } from '../types';
 import { downloadBibFile } from '../lib/bibUtils';
@@ -26,7 +27,10 @@ import {
   PersonStanding,
   Upload,
   Download,
-  Lightbulb
+  Lightbulb,
+  FileText,
+  AlignLeft,
+  Tag
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -282,6 +286,17 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       setLocalMemos(prev => prev.filter(m => m.id !== id));
   };
 
+  // --- Abstract Handlers ---
+  const updateAbstract = (field: keyof typeof localSettings.structuredAbstract, value: string) => {
+      setLocalSettings(prev => ({
+          ...prev,
+          structuredAbstract: {
+              ...prev.structuredAbstract,
+              [field]: value
+          }
+      }));
+  };
+
   const findings = localMemos.filter(m => m.type === 'finding');
 
   return (
@@ -365,6 +380,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                 <div className="h-px bg-zinc-800 my-2 mx-2" />
                 
+                <NavButton 
+                    active={activeTab === 'abstract'} 
+                    onClick={() => setActiveTab('abstract')} 
+                    icon={FileText} 
+                    label="Structured Abstract" 
+                />
                 <NavButton 
                     active={activeTab === 'analysis'} 
                     onClick={() => setActiveTab('analysis')} 
@@ -622,6 +643,78 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 </div>
                             ))}
                         </div>
+                    </div>
+                )}
+                
+                {activeTab === 'abstract' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                         <SectionHeader title="Structured Abstract" description="Draft the core components of your research paper." />
+
+                         <div className="space-y-5">
+                             <div className="grid gap-2">
+                                <label className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                                    <AlignLeft size={16} className="text-blue-500"/> Background & Objectives
+                                </label>
+                                <p className="text-xs text-zinc-500">Describe the context, research gap, and the aim of your study.</p>
+                                <Textarea 
+                                    value={localSettings.structuredAbstract.background}
+                                    onChange={(e) => updateAbstract('background', e.target.value)}
+                                    placeholder="The purpose of this study is to..."
+                                    className="min-h-[100px] bg-zinc-900 border-zinc-800"
+                                />
+                             </div>
+
+                             <div className="grid gap-2">
+                                <label className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                                    <Microscope size={16} className="text-purple-500"/> Methods
+                                </label>
+                                <p className="text-xs text-zinc-500">Detail participants, data collection, and analysis procedures.</p>
+                                <Textarea 
+                                    value={localSettings.structuredAbstract.methods}
+                                    onChange={(e) => updateAbstract('methods', e.target.value)}
+                                    placeholder="We conducted semi-structured interviews with..."
+                                    className="min-h-[100px] bg-zinc-900 border-zinc-800"
+                                />
+                             </div>
+
+                             <div className="grid gap-2">
+                                <label className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                                    <Lightbulb size={16} className="text-amber-500"/> Results
+                                </label>
+                                <p className="text-xs text-zinc-500">Summarize key findings and theoretical categories.</p>
+                                <Textarea 
+                                    value={localSettings.structuredAbstract.results}
+                                    onChange={(e) => updateAbstract('results', e.target.value)}
+                                    placeholder="The analysis revealed three core themes..."
+                                    className="min-h-[100px] bg-zinc-900 border-zinc-800"
+                                />
+                             </div>
+
+                             <div className="grid gap-2">
+                                <label className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                                    <ScrollText size={16} className="text-emerald-500"/> Conclusion
+                                </label>
+                                <p className="text-xs text-zinc-500">State implications, limitations, and recommendations.</p>
+                                <Textarea 
+                                    value={localSettings.structuredAbstract.conclusion}
+                                    onChange={(e) => updateAbstract('conclusion', e.target.value)}
+                                    placeholder="These findings suggest that..."
+                                    className="min-h-[100px] bg-zinc-900 border-zinc-800"
+                                />
+                             </div>
+
+                             <div className="grid gap-2">
+                                <label className="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                                    <Tag size={16} className="text-zinc-500"/> Keywords
+                                </label>
+                                <Input 
+                                    value={localSettings.structuredAbstract.keywords}
+                                    onChange={(e) => updateAbstract('keywords', e.target.value)}
+                                    placeholder="Grounded Theory, Qualitative Analysis, ..."
+                                    className="bg-zinc-900 border-zinc-800"
+                                />
+                             </div>
+                         </div>
                     </div>
                 )}
 

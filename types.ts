@@ -210,6 +210,14 @@ export interface Point {
   y: number;
 }
 
+export interface StructuredAbstract {
+  background: string;
+  methods: string;
+  results: string;
+  conclusion: string;
+  keywords: string;
+}
+
 export interface ProjectSettings {
   projectName: string;
   userName: string; // Legacy field, kept for backward compat, but UI should favor activeResearcher
@@ -225,4 +233,7 @@ export interface ProjectSettings {
   fieldOfStudy: FieldOfStudy;
   theoreticalFramework: TheoreticalFramework;
   participants: Participant[];
+  
+  // Reporting
+  structuredAbstract: StructuredAbstract;
 }
