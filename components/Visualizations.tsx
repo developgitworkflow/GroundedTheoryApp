@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
 import { Code, Coding, Artifact, ProjectSettings } from '../types';
@@ -237,8 +236,11 @@ const TreeMap = ({ data }: { data: (Code & { count: number })[] }) => {
             .padding(2)
             (root);
 
+        // Cast leaves to Rectangular node to access coordinates
+        const leaves = root.leaves() as d3.HierarchyRectangularNode<any>[];
+
         const nodes = svg.selectAll("g")
-            .data(root.leaves())
+            .data(leaves)
             .enter()
             .append("g")
             .attr("transform", d => `translate(${d.x0},${d.y0})`);

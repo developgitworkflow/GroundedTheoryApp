@@ -1,8 +1,9 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { Code, Coding, LayerType } from '../types';
 import { buildTheoryGraph, GraphNode, GraphLink } from '../lib/graphUtils';
-import { ZoomIn, ZoomOut, Maximize, RefreshCw, Layers } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, RefreshCw, Layers, Focus } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface TheoryGraphProps {
@@ -27,6 +28,7 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
   
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   // Handle Resize
   useEffect(() => {
@@ -68,10 +70,59 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear canvas
 
+    // --- Definitions (Gradients & Filters) ---
+    const defs = svg.append("defs");
+
+    // Glow Filter for Core Nodes
+    const filter = defs.append("filter")
+        .attr("id", "glow")
+        .attr("x", "-50%")
+        .attr("y", "-50%")
+        .attr("width", "200%")
+        .attr("height", "200%");
+    filter.append("feGaussianBlur")
+        .attr("stdDeviation", "4")
+        .attr("result", "coloredBlur");
+    const feMerge = filter.append("feMerge");
+    feMerge.append("feMergeNode").attr("in", "coloredBlur");
+    feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
+    // Arrow Markers
+    const marker = defs.append("marker")
+        .attr("id", "arrowhead")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 20) // Adjust based on node radius approx
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#6b7280");
+
     // 1. Data Prep
     const graphData = buildTheoryGraph(codes, codings);
     const nodes: D3Node[] = graphData.nodes.map(n => ({ ...n })); 
     const links: D3Link[] = graphData.links.map(l => ({ ...l }));
+
+    // Create unique gradients for each node color dynamically
+    nodes.forEach(node => {
+        const gradId = `grad-${node.id}`;
+        const gradient = defs.append("radialGradient")
+            .attr("id", gradId)
+            .attr("cx", "30%")
+            .attr("cy", "30%")
+            .attr("r", "70%");
+        
+        // Highlight
+        gradient.append("stop")
+            .attr("offset", "0%")
+            .attr("stop-color", d3.rgb(node.color).brighter(1.5).toString());
+        // Main color
+        gradient.append("stop")
+            .attr("offset", "100%")
+            .attr("stop-color", node.color);
+    });
 
     // 2. Zoom Setup
     const container = svg.append("g");
@@ -84,22 +135,18 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
         });
     
     zoomRef.current = zoom;
-    svg.call(zoom).on("dblclick.zoom", null); // Disable double click zoom
+    svg.call(zoom).on("dblclick.zoom", null);
 
     // 3. Simulation Setup
     const simulation = d3.forceSimulation(nodes)
       .force("link", d3.forceLink(links)
           .id((d: any) => d.id)
           .distance((d: any) => {
-              if (d.type === 'hierarchy') return 80; // Tighter cluster for category->child
-              if (d.type === 'theoretical') return 200; // Longer links for core connections
-              return 150; // Loose for associations
+              if (d.type === 'hierarchy') return 80;
+              if (d.type === 'theoretical') return 200; 
+              return 150; 
           })
-          .strength((d: any) => {
-              if (d.type === 'hierarchy') return 0.8;
-              if (d.type === 'theoretical') return 0.1;
-              return 0.2;
-          })
+          .strength((d: any) => d.type === 'hierarchy' ? 0.8 : 0.2)
       )
       .force("charge", d3.forceManyBody().strength((d: any) => {
           if (d.isCore) return -800;
@@ -108,115 +155,128 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
       }))
       .force("collide", d3.forceCollide().radius((d: any) => {
           if (d.isCore) return 60;
-          if (d.kind === 'category') return 30;
-          return 10;
-      }).strength(0.7))
+          if (d.kind === 'category') return 35;
+          return 15;
+      }).strength(0.8))
       .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05));
 
     // 4. Rendering Elements
 
-    // Define Arrow markers
-    svg.append("defs").selectAll("marker")
-        .data(["end"])
-        .enter().append("marker")
-        .attr("id", String)
-        .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 25)
-        .attr("refY", 0)
-        .attr("markerWidth", 6)
-        .attr("markerHeight", 6)
-        .attr("orient", "auto")
-        .append("path")
-        .attr("d", "M0,-5L10,0L0,5")
-        .attr("fill", "#555");
-
     // Links
     const link = container.append("g")
-      .selectAll("line")
+      .attr("class", "links")
+      .selectAll("path")
       .data(links)
-      .join("line")
-      .attr("stroke", (d) => d.type === 'hierarchy' ? "#60a5fa" : "#4b5563") // Blue for structure, gray for association
+      .join("path")
+      .attr("stroke", (d) => d.type === 'hierarchy' ? "#60a5fa" : "#4b5563") 
       .attr("stroke-opacity", (d) => d.type === 'hierarchy' ? 0.6 : 0.3)
       .attr("stroke-width", (d) => d.type === 'hierarchy' ? 2 : Math.sqrt(d.value))
-      .attr("stroke-dasharray", (d) => d.type === 'association' ? "3 3" : "0");
+      .attr("stroke-dasharray", (d) => d.type === 'association' ? "4 4" : "0")
+      .attr("fill", "none")
+      .attr("marker-end", (d) => d.type === 'hierarchy' ? "url(#arrowhead)" : null);
 
     // Nodes (Groups)
     const node = container.append("g")
-      .selectAll(".node")
+      .attr("class", "nodes")
+      .selectAll("g")
       .data(nodes)
       .join("g")
-      .attr("class", "node")
       .call(d3.drag<any, any>()
           .on("start", dragstarted)
           .on("drag", dragged)
           .on("end", dragended));
 
-    // -- Visual Layer 1: Core Halo --
-    node.filter(d => d.isCore)
-        .append("circle")
-        .attr("r", 40)
-        .attr("fill", "url(#goldGradient)") // Simple fill for now
-        .attr("fill-opacity", 0.2)
-        .attr("stroke", "#fbbf24")
-        .attr("stroke-width", 1)
-        .attr("stroke-dasharray", "4 2")
-        .attr("class", "animate-pulse-slow");
-
-    // -- Visual Layer 2: Categories (The "Hubs") --
-    node.filter(d => d.kind === 'category')
-        .append("circle")
-        .attr("r", d => d.isCore ? 25 : 15) // Larger radius
-        .attr("fill", "#18181b") // Dark center
-        .attr("stroke", d => d.color)
-        .attr("stroke-width", d => selectedCodeId === d.id ? 4 : 3);
-
-    // -- Visual Layer 3: Codes (The "Leaves") --
-    node.filter(d => d.kind === 'code')
-        .append("circle")
-        .attr("r", d => 4 + Math.sqrt(d.val))
-        .attr("fill", d => d.color)
-        .attr("stroke", "#18181b")
-        .attr("stroke-width", 1.5)
-        .attr("opacity", 0.9);
-
-    // Interaction Circle (Invisible hit target larger than visual)
+    // -- Node Shape (Sphere) --
     node.append("circle")
-        .attr("r", d => d.kind === 'category' ? 30 : 15)
-        .attr("fill", "transparent")
-        .attr("cursor", "pointer")
-        .on("click", (e, d) => {
-            e.stopPropagation();
-            onNodeClick(d.id);
-        });
+        .attr("r", d => {
+            if (d.isCore) return 30;
+            if (d.kind === 'category') return 18;
+            return 6 + Math.sqrt(d.val);
+        })
+        .attr("fill", d => `url(#grad-${d.id})`) // Use defined gradient
+        .attr("stroke", d => selectedCodeId === d.id ? "#fff" : (d.kind === 'code' ? "#18181b" : "none"))
+        .attr("stroke-width", d => selectedCodeId === d.id ? 3 : 1)
+        .style("filter", d => d.isCore ? "url(#glow)" : "none");
 
-    // Labels (Semantic Zoom Logic handled in Tick or CSS)
+    // -- Node Labels --
     const labels = node.append("text")
       .text(d => d.name)
-      .attr("x", d => d.kind === 'category' ? 0 : 10)
-      .attr("y", d => d.kind === 'category' ? 30 : 4)
+      .attr("x", d => d.kind === 'category' ? 0 : 12)
+      .attr("y", d => d.kind === 'category' ? 35 : 4)
       .attr("text-anchor", d => d.kind === 'category' ? "middle" : "start")
-      .attr("fill", d => selectedCodeId === d.id ? "#60a5fa" : (d.kind === 'category' ? "#e4e4e7" : "#a1a1aa"))
-      .attr("font-size", d => d.kind === 'category' ? "12px" : "10px")
+      .attr("fill", d => d.kind === 'category' ? "#e4e4e7" : "#a1a1aa")
+      .attr("font-size", d => d.kind === 'category' ? "11px" : "9px")
       .attr("font-weight", d => d.kind === 'category' ? "bold" : "normal")
       .style("pointer-events", "none")
       .style("text-shadow", "0 1px 4px black");
 
+    // --- Hover Interactions ---
+    node.on("mouseover", (event, d) => {
+        setHoveredNodeId(d.id);
+        
+        // Spotlight Logic: Fade others
+        const connectedNodeIds = new Set<string>();
+        const connectedLinkIds = new Set<string>();
+        
+        connectedNodeIds.add(d.id);
+        
+        links.forEach((l: any) => {
+            if (l.source.id === d.id) {
+                connectedNodeIds.add(l.target.id);
+                connectedLinkIds.add(`${l.source.id}-${l.target.id}`); // implicit check by obj ref usually better
+            }
+            if (l.target.id === d.id) {
+                connectedNodeIds.add(l.source.id);
+                connectedLinkIds.add(`${l.source.id}-${l.target.id}`);
+            }
+        });
+
+        node.transition().duration(200)
+            .style("opacity", (n) => connectedNodeIds.has(n.id) ? 1 : 0.1);
+            
+        link.transition().duration(200)
+            .style("opacity", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.05)
+            .attr("stroke", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? "#fff" : (l.type === 'hierarchy' ? "#60a5fa" : "#4b5563"));
+            
+        labels.transition().duration(200)
+            .style("opacity", (n) => connectedNodeIds.has(n.id) ? 1 : 0.1);
+
+    }).on("mouseout", () => {
+        setHoveredNodeId(null);
+        
+        node.transition().duration(300).style("opacity", 1);
+        link.transition().duration(300)
+            .style("opacity", (d) => d.type === 'hierarchy' ? 0.6 : 0.3)
+            .attr("stroke", (d) => d.type === 'hierarchy' ? "#60a5fa" : "#4b5563");
+        
+        // Re-apply semantic zoom opacity
+        labels.transition().duration(300).style("opacity", (d) => (d.isCore || d.kind === 'category' || zoomLevel >= 0.8) ? 1 : 0);
+    });
+
+    // Click Handler
+    node.on("click", (event, d) => {
+        event.stopPropagation();
+        onNodeClick(d.id);
+    });
+
     // Simulation Tick
     simulation.on("tick", () => {
-      link
-        .attr("x1", (d: any) => d.source.x)
-        .attr("y1", (d: any) => d.source.y)
-        .attr("x2", (d: any) => d.target.x)
-        .attr("y2", (d: any) => d.target.y);
+      link.attr("d", (d: any) => {
+          const dx = d.target.x - d.source.x;
+          const dy = d.target.y - d.source.y;
+          const dr = d.type === 'association' ? Math.sqrt(dx * dx + dy * dy) * 1.2 : 0; // Curve for associations
+          return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+      });
 
       node.attr("transform", (d) => `translate(${d.x},${d.y})`);
       
-      // Semantic Zoom: Hide small labels when zoomed out
-      labels.style("opacity", (d) => {
-          if (d.isCore || d.kind === 'category') return 1;
-          // Hide code labels if zoom < 0.8
-          return zoomLevel < 0.8 ? 0 : 1; 
-      });
+      // Semantic Zoom logic (only apply if not hovering)
+      if (!hoveredNodeId) {
+          labels.style("opacity", (d) => {
+              if (d.isCore || d.kind === 'category') return 1;
+              return zoomLevel < 0.8 ? 0 : 1; 
+          });
+      }
     });
 
     function dragstarted(event: any) {
@@ -239,24 +299,24 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     return () => {
       simulation.stop();
     };
-  }, [codes, codings, layersVisible, dimensions, selectedCodeId, zoomLevel]);
+  }, [codes, codings, layersVisible, dimensions, selectedCodeId, zoomLevel]); // Removed hoveredNodeId dependency to prevent full re-render on hover
 
   if (!layersVisible[LayerType.AXIAL_CONNECTIONS]) return null;
 
   return (
     <div 
       ref={wrapperRef} 
-      className="absolute inset-0 z-10 overflow-hidden bg-gradient-to-b from-transparent to-zinc-950/20" 
+      className="absolute inset-0 z-10 overflow-hidden bg-gradient-to-b from-zinc-950/80 to-zinc-950/30 pointer-events-none"
     >
       <svg 
         ref={svgRef} 
         width={dimensions.width} 
         height={dimensions.height} 
-        className="cursor-move"
+        className="cursor-move pointer-events-auto"
       />
       
       {/* Controls Overlay */}
-      <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-zinc-800/50 shadow-xl">
+      <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-black/60 backdrop-blur-md p-1 rounded-lg border border-zinc-800/50 shadow-xl pointer-events-auto">
           <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleZoomIn} title="Zoom In">
               <ZoomIn size={16} />
           </Button>
@@ -270,26 +330,26 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
       </div>
 
       {/* Legend Overlay */}
-      <div className="absolute top-4 right-4 bg-black/60 p-3 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-zinc-800 pointer-events-none select-none">
-        <div className="font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center gap-2">
-            <Layers size={12}/> Network Layers
+      <div className="absolute top-4 right-4 bg-black/80 p-3 rounded-lg text-xs text-gray-300 backdrop-blur-md border border-zinc-800 pointer-events-auto select-none shadow-2xl">
+        <div className="font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <Layers size={12}/> Ontology Network
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
             <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border-2 border-[#fbbf24] bg-transparent"></div> 
-                <span>Core Category</span>
+                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 shadow-md shadow-amber-500/20"></div> 
+                <span className="text-zinc-200">Core Phenomenon</span>
             </div>
             <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border-2 border-zinc-500 bg-zinc-900"></div> 
+                <div className="w-3 h-3 rounded-full bg-gradient-to-br from-zinc-400 to-zinc-600 border border-zinc-500"></div> 
                 <span>Category (Hub)</span>
             </div>
             <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500"></div> 
-                <span>Open Code</span>
+                <span>Concept Code</span>
             </div>
-            <div className="w-full h-px bg-zinc-700 my-1"></div>
+            <div className="w-full h-px bg-zinc-700 my-2"></div>
             <div className="flex items-center gap-2">
-                <div className="w-6 h-0.5 bg-blue-400 opacity-60"></div> 
+                <div className="w-6 h-0.5 bg-blue-400"></div> 
                 <span className="text-blue-200">Hierarchy</span>
             </div>
             <div className="flex items-center gap-2">

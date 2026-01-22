@@ -36,7 +36,7 @@ const INITIAL_LAYERS: LayerConfig[] = [
   { id: LayerType.ARTIFACT, label: 'Artifact Source', visible: true, color: '#fff' },
   { id: LayerType.OPEN_CODING, label: 'Open Codes', visible: true, color: '#60a5fa' },
   { id: LayerType.CATEGORIES, label: 'Categories', visible: false, color: '#fbbf24' }, 
-  { id: LayerType.AXIAL_CONNECTIONS, label: 'Theory Network', visible: true, color: '#f472b6' },
+  { id: LayerType.AXIAL_CONNECTIONS, label: 'Theory Network', visible: false, color: '#f472b6' },
   { id: LayerType.THEORY_MEMOS, label: 'Annotations', visible: false, color: '#fbbf24' },
 ];
 

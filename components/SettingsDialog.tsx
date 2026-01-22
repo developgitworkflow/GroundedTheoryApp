@@ -3,6 +3,8 @@ import React, { useState, useRef } from 'react';
 import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool, Memo, Code, Coding, Artifact } from '../types';
 import { downloadBibFile } from '../lib/bibUtils';
 import { exportProjectToOwl, parseOwlToProject } from '../lib/owlUtils';
+import { generateRoCrate } from '../lib/roCrateUtils';
+import { exportProjectToRefiQda, parseRefiQdaToProject } from '../lib/refiQdaUtils';
 import { 
   Settings, 
   User, 
@@ -32,7 +34,10 @@ import {
   FileText,
   AlignLeft,
   Tag,
-  Archive
+  Archive,
+  Package,
+  HardDrive,
+  ArrowRightLeft
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -74,6 +79,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const [activeTab, setActiveTab] = useState('general');
   const bibFileInputRef = useRef<HTMLInputElement>(null);
   const owlFileInputRef = useRef<HTMLInputElement>(null);
+  const refiFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -100,6 +106,71 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+  };
+
+  const handleExportRoCrate = async () => {
+      try {
+          const blob = await generateRoCrate(
+              localSettings,
+              artifacts,
+              codes,
+              codings,
+              localMemos,
+              localTeam,
+              localSettings.participants
+          );
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${localSettings.projectName.replace(/\s+/g, '_')}_ro_crate.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+      } catch (error) {
+          console.error("Failed to generate RO-Crate", error);
+          alert("Error generating RO-Crate. See console.");
+      }
+  };
+
+  const handleExportRefi = async () => {
+      try {
+          const blob = await exportProjectToRefiQda({
+              settings: localSettings,
+              team: localTeam,
+              memos: localMemos,
+              codes,
+              codings,
+              artifacts
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${localSettings.projectName.replace(/\s+/g, '_')}_refi.qdpx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+      } catch (error) {
+          console.error("Failed to generate REFI-QDA", error);
+          alert("Error generating QDPX file.");
+      }
+  };
+
+  const handleImportRefi = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+          const importedProject = await parseRefiQdaToProject(file);
+          if (confirm("This will overwrite current project data with the REFI-QDA import. Continue?")) {
+              onImportProject(importedProject);
+              onClose();
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Failed to parse QDPX file.");
+      }
+      if (refiFileInputRef.current) refiFileInputRef.current.value = '';
   };
 
   const handleImportOwl = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,6 +434,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         accept=".owl,.xml,.rdf" 
         className="hidden" 
       />
+      <input 
+        type="file" 
+        ref={refiFileInputRef} 
+        onChange={handleImportRefi} 
+        accept=".qdpx,.zip" 
+        className="hidden" 
+      />
       
       <div className="w-[900px] h-[700px] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
@@ -391,6 +469,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     onClick={() => setActiveTab('general')} 
                     icon={LayoutTemplate} 
                     label="General" 
+                />
+                <NavButton 
+                    active={activeTab === 'data'} 
+                    onClick={() => setActiveTab('data')} 
+                    icon={Archive} 
+                    label="Data Management" 
                 />
                  <NavButton 
                     active={activeTab === 'team'} 
@@ -505,24 +589,84 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 />
                              </div>
                         </div>
-
-                        <div className="h-px bg-zinc-800 my-4" />
-
-                        <SectionHeader title="Data Management" description="Backup and restore full project state." />
-                        <div className="flex gap-4">
-                            <Button variant="outline" className="flex-1 gap-2 border-zinc-700" onClick={handleExportOwl}>
-                                <Download size={14}/> Export Project (OWL)
-                            </Button>
-                            <Button variant="outline" className="flex-1 gap-2 border-zinc-700" onClick={() => owlFileInputRef.current?.click()}>
-                                <Upload size={14}/> Import Project (OWL)
-                            </Button>
-                        </div>
-                        <p className="text-xs text-zinc-500 mt-2">
-                            Exports include codes, ontology, memos, settings, and artifacts in RDF/XML format compliant with Stratum Schema.
-                        </p>
                     </div>
                 )}
 
+                {activeTab === 'data' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <SectionHeader title="Data Management" description="Backup, restore, and archive project data." />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="col-span-2 p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-bold text-zinc-200 flex items-center gap-2 mb-1">
+                                        <Package size={16} className="text-emerald-500" />
+                                        Research Object Crate (RO-Crate)
+                                    </h4>
+                                    <p className="text-xs text-zinc-500">
+                                        Generate a standards-compliant archive package containing all artifacts, metadata, and relationships.
+                                        Suitable for long-term preservation and publication.
+                                    </p>
+                                </div>
+                                <Button variant="brand" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white gap-2" onClick={handleExportRoCrate}>
+                                    <Package size={14}/> Download RO-Crate Package
+                                </Button>
+                            </div>
+
+                            <div className="col-span-2 p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-bold text-zinc-200 flex items-center gap-2 mb-1">
+                                        <ArrowRightLeft size={16} className="text-indigo-500" />
+                                        REFI-QDA Standard
+                                    </h4>
+                                    <p className="text-xs text-zinc-500">
+                                        Exchange project data with other qualitative analysis software (NVivo, ATLAS.ti, MAXQDA) using the QDPX standard.
+                                    </p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Button variant="outline" className="w-full gap-2 border-zinc-700" onClick={handleExportRefi}>
+                                        <Download size={14}/> Export QDPX
+                                    </Button>
+                                    <Button variant="outline" className="w-full gap-2 border-zinc-700" onClick={() => refiFileInputRef.current?.click()}>
+                                        <Upload size={14}/> Import QDPX
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-bold text-zinc-200 flex items-center gap-2 mb-1">
+                                        <Download size={16} className="text-blue-500" />
+                                        Project Snapshot
+                                    </h4>
+                                    <p className="text-xs text-zinc-500">
+                                        Save the full project state as an RDF/OWL ontology file. 
+                                    </p>
+                                </div>
+                                <Button variant="outline" className="w-full gap-2 border-zinc-700" onClick={handleExportOwl}>
+                                    <Download size={14}/> Export .owl
+                                </Button>
+                            </div>
+
+                            <div className="p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-bold text-zinc-200 flex items-center gap-2 mb-1">
+                                        <Upload size={16} className="text-amber-500" />
+                                        Project Restore
+                                    </h4>
+                                    <p className="text-xs text-zinc-500">
+                                        Restore a project from a previously exported OWL file.
+                                        <span className="text-red-400 block mt-1">Warning: Overwrites current data.</span>
+                                    </p>
+                                </div>
+                                <Button variant="outline" className="w-full gap-2 border-zinc-700" onClick={() => owlFileInputRef.current?.click()}>
+                                    <Upload size={14}/> Import .owl
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ... other tabs ... */}
                 {activeTab === 'participants' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
