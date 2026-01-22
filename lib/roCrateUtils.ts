@@ -17,6 +17,7 @@ export const generateRoCrate = async (
 ): Promise<Blob> => {
   const zip = new JSZip();
   const dataFolder = zip.folder("data");
+  const protocolsFolder = dataFolder?.folder("protocols");
 
   // --- 1. Prepare Graph Entities ---
   const graph: any[] = [];
@@ -30,9 +31,11 @@ export const generateRoCrate = async (
     "about": { "@id": rootId }
   });
 
-  const artifactIds: string[] = [];
-  
-  // Artifacts (Data Entities)
+  const partsIds: any[] = [];
+  const mentionsIds: any[] = [];
+  const aboutIds: any[] = [];
+
+  // --- ARTIFACTS (Data) ---
   artifacts.forEach(art => {
     // Sanitize filename
     const safeName = art.name.replace(/[^a-z0-9\.\-]/gi, '_');
@@ -45,7 +48,7 @@ export const generateRoCrate = async (
         dataFolder.file(fileName, art.content);
     }
 
-    artifactIds.push(filePath);
+    partsIds.push({ "@id": filePath });
 
     graph.push({
       "@id": filePath,
@@ -58,7 +61,28 @@ export const generateRoCrate = async (
     });
   });
 
-  // Researchers (Context Entities)
+  // --- PROTOCOLS (Methods as Files) ---
+  settings.theoreticalFramework.methods.forEach(m => {
+      const filename = `protocol_${m.id}_${m.type}.txt`;
+      const filePath = `data/protocols/${filename}`;
+      
+      if (protocolsFolder) {
+          protocolsFolder.file(filename, m.protocolContent || "No content.");
+      }
+
+      partsIds.push({ "@id": filePath });
+
+      graph.push({
+          "@id": filePath,
+          "@type": ["File", "HowTo", "CreativeWork"],
+          "name": `${m.type.charAt(0).toUpperCase() + m.type.slice(1)} Protocol`,
+          "description": `Protocol used for ${m.type} data collection.`,
+          "encodingFormat": "text/plain",
+          "about": m.participantIds?.map(pid => ({ "@id": `#participant-${pid}` }))
+      });
+  });
+
+  // --- RESEARCHERS ---
   team.researchers.forEach(r => {
     graph.push({
       "@id": `#person-${r.id}`,
@@ -68,10 +92,12 @@ export const generateRoCrate = async (
     });
   });
 
-  // Participants (Context Entities)
+  // --- PARTICIPANTS ---
   participants.forEach(p => {
+    const pid = `#participant-${p.id}`;
+    aboutIds.push({ "@id": pid });
     graph.push({
-      "@id": `#participant-${p.id}`,
+      "@id": pid,
       "@type": "Person",
       "name": p.anonymizedCode,
       "description": p.description,
@@ -79,7 +105,59 @@ export const generateRoCrate = async (
     });
   });
 
-  // Codebook (DefinedTermSet)
+  // --- FIELD OF STUDY ---
+  if (settings.fieldOfStudy.subjectOfStudy) {
+      graph.push({
+          "@id": "#subjectOfStudy",
+          "@type": "Thing",
+          "name": settings.fieldOfStudy.subjectOfStudy,
+          "description": "Subject of Study (Actors)"
+      });
+      aboutIds.push({ "@id": "#subjectOfStudy" });
+  }
+  if (settings.fieldOfStudy.objectOfStudy) {
+      graph.push({
+          "@id": "#objectOfStudy",
+          "@type": "Thing",
+          "name": settings.fieldOfStudy.objectOfStudy,
+          "description": "Object of Study (Phenomenon)"
+      });
+      aboutIds.push({ "@id": "#objectOfStudy" });
+  }
+  if (settings.fieldOfStudy.location) {
+      graph.push({
+          "@id": "#location",
+          "@type": "Place",
+          "name": settings.fieldOfStudy.location
+      });
+      aboutIds.push({ "@id": "#location" });
+  }
+
+  // --- RESEARCH QUESTIONS ---
+  settings.theoreticalFramework.researchQuestions.forEach(rq => {
+      const id = `#question-${rq.id}`;
+      mentionsIds.push({ "@id": id });
+      graph.push({
+          "@id": id,
+          "@type": "Question",
+          "name": rq.content
+      });
+  });
+
+  // --- TOOLS ---
+  settings.theoreticalFramework.tools.forEach(t => {
+      const id = `#tool-${t.id}`;
+      mentionsIds.push({ "@id": id }); // Tools are mentioned as used
+      graph.push({
+          "@id": id,
+          "@type": ["SoftwareApplication", "Product"],
+          "name": t.name,
+          "softwareVersion": t.version,
+          "url": t.referenceURL
+      });
+  });
+
+  // --- CODEBOOK ---
   graph.push({
     "@id": "#codebook",
     "@type": "DefinedTermSet",
@@ -87,10 +165,12 @@ export const generateRoCrate = async (
     "description": "Grounded Theory Codes and Categories"
   });
 
-  // Codes (DefinedTerms)
+  // --- CODES ---
   codes.forEach(c => {
+    const codeId = `#code-${c.id}`;
+    mentionsIds.push({ "@id": codeId });
     graph.push({
-      "@id": `#code-${c.id}`,
+      "@id": codeId,
       "@type": "DefinedTerm",
       "inDefinedTermSet": { "@id": "#codebook" },
       "name": c.name,
@@ -101,11 +181,16 @@ export const generateRoCrate = async (
     });
   });
 
-  // Memos / Findings (CreativeWork / Comment)
+  // --- MEMOS ---
   memos.forEach(m => {
-    const aboutIds = m.relatedIds.map(rid => {
+    const aboutRefs = m.relatedIds.map(rid => {
         // Try to match ID to artifact or code
-        if (artifacts.find(a => a.id === rid)) return { "@id": `data/${artifacts.find(a => a.id === rid)?.id}_...` }; // Simplified matching
+        if (artifacts.find(a => a.id === rid)) {
+             const art = artifacts.find(a => a.id === rid);
+             const safeName = art!.name.replace(/[^a-z0-9\.\-]/gi, '_');
+             const extension = art!.media === 'text' ? '.txt' : '.dat';
+             return { "@id": `data/${art!.id}_${safeName}${extension}` };
+        }
         if (codes.find(c => c.id === rid)) return { "@id": `#code-${rid}` };
         return null;
     }).filter(Boolean);
@@ -117,12 +202,12 @@ export const generateRoCrate = async (
       "text": m.content,
       "dateCreated": m.createdAt,
       "author": m.authorId ? { "@id": `#person-${m.authorId}` } : undefined,
-      "about": aboutIds.length > 0 ? aboutIds : undefined,
+      "about": aboutRefs.length > 0 ? aboutRefs : undefined,
       "keywords": m.type
     });
   });
 
-  // Main Dataset Entity
+  // --- ROOT DATASET ---
   graph.push({
     "@id": rootId,
     "@type": "Dataset",
@@ -132,9 +217,9 @@ export const generateRoCrate = async (
     "license": "https://creativecommons.org/licenses/by/4.0/",
     "keywords": settings.structuredAbstract.keywords,
     "author": team.researchers.map(r => ({ "@id": `#person-${r.id}` })),
-    "hasPart": artifactIds.map(id => ({ "@id": id })),
-    "mentions": codes.map(c => ({ "@id": `#code-${c.id}` })),
-    "about": participants.map(p => ({ "@id": `#participant-${p.id}` }))
+    "hasPart": partsIds,
+    "mentions": mentionsIds,
+    "about": aboutIds
   });
 
   // --- 2. Write Metadata ---

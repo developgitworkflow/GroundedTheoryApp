@@ -15,7 +15,8 @@ import {
   Trash2, 
   FolderOpen,
   Tag,
-  Move
+  Move,
+  CornerDownRight
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -40,7 +41,6 @@ interface OntologyManagerProps {
   onDeleteCode: (id: string) => void;
   onElaborate: () => void;
   isElaborating: boolean;
-  // onImport and onExport removed
 }
 
 // Cycle detection helper: Checks if targetId is a descendant of draggedId
@@ -157,7 +157,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
             onDrop={viewMode === 'tree' ? handleRootDrop : undefined}
         >
             {viewMode === 'tree' ? (
-                <div className="space-y-1 min-h-[300px]">
+                <div className="space-y-1 min-h-[300px] relative">
                     {rootCodes.length === 0 && <div className="text-zinc-600 text-xs text-center py-4">No codes defined. Drop here to create root items.</div>}
                     {rootCodes.map(code => (
                         <TreeItem 
@@ -203,7 +203,6 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   );
 };
 
-// ... (Rest of the file remains unchanged: TreeItem, OntologyTable, components)
 interface TreeItemProps {
     code: Code;
     allCodes: Code[];
@@ -267,6 +266,7 @@ const TreeItem: React.FC<TreeItemProps> = ({
         }
 
         onUpdateCode(draggedId, { parentId: code.id });
+        if(!isOpen) setIsOpen(true); // Auto expand on drop
     };
 
     if (searchTerm && !matches && !hasMatchingChildren) return null;
@@ -287,9 +287,19 @@ const TreeItem: React.FC<TreeItemProps> = ({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
+                {/* Visual Connector for indented items */}
+                {depth > 0 && (
+                    <span className="absolute -left-3 text-zinc-700">
+                        <CornerDownRight size={10} strokeWidth={1} />
+                    </span>
+                )}
+
                 <div 
                     onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-                    className={cn("p-0.5 rounded hover:bg-zinc-700 text-zinc-500", children.length === 0 && "opacity-0 pointer-events-none")}
+                    className={cn(
+                        "p-0.5 rounded hover:bg-zinc-700 text-zinc-500 transition-transform", 
+                        children.length === 0 && "opacity-0 pointer-events-none"
+                    )}
                 >
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </div>
