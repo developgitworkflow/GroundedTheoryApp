@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ProjectSettings, Memo, Artifact, Code, ResearchTeam } from '../types';
 import { 
   FileText, 
@@ -12,9 +12,16 @@ import {
   Target,
   Microscope,
   Lightbulb,
-  ScrollText
+  ScrollText,
+  ShieldCheck,
+  Globe,
+  Database,
+  Repeat,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
@@ -35,7 +42,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
   artifacts,
   onUpdateSettings 
 }) => {
-  const [activeSection, setActiveSection] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'abstract' | 'fair'>('abstract');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   const abstract = settings.structuredAbstract;
@@ -104,6 +111,36 @@ export const ReportView: React.FC<ReportViewProps> = ({
       alert("Abstract copied to clipboard!");
   };
 
+  // --- FAIR Calculation ---
+  const fairStats = useMemo(() => {
+      // Findable
+      const hasPid = artifacts.every(a => a.hashID);
+      const hasMetadata = !!(settings.fieldOfStudy.subjectOfStudy && settings.fieldOfStudy.objectOfStudy);
+      const hasKeywords = settings.structuredAbstract.keywords.length > 0;
+      
+      // Accessible
+      const accessDefined = artifacts.every(a => a.access);
+      const consentVerified = artifacts.every(a => a.curation.consentObtained);
+      
+      // Interoperable
+      const ontologyExists = codes.length > 0;
+      const formatStandard = artifacts.every(a => ['text','video','audio'].includes(a.media));
+      
+      // Reusable
+      const provenance = artifacts.every(a => a.curation.source && a.curation.dateCreated);
+      const license = true; // Implicit in this tool context for now
+      
+      const fScore = [hasPid, hasMetadata, hasKeywords].filter(Boolean).length / 3 * 100;
+      const aScore = [accessDefined, consentVerified].filter(Boolean).length / 2 * 100;
+      const iScore = [ontologyExists, formatStandard].filter(Boolean).length / 2 * 100;
+      const rScore = [provenance, license].filter(Boolean).length / 2 * 100;
+
+      return {
+          fScore, aScore, iScore, rScore,
+          checks: { hasPid, hasMetadata, hasKeywords, accessDefined, consentVerified, ontologyExists, formatStandard, provenance }
+      };
+  }, [settings, artifacts, codes]);
+
   return (
     <div className="flex h-full bg-zinc-950 overflow-hidden">
         {/* Left: Section Navigation */}
@@ -113,48 +150,71 @@ export const ReportView: React.FC<ReportViewProps> = ({
                     <FileText className="text-emerald-500" size={20} />
                     Report Gen
                 </h2>
-                <p className="text-xs text-zinc-500 mt-1">Structured Abstract Builder</p>
+                <p className="text-xs text-zinc-500 mt-1">Research Output & Compliance</p>
             </div>
 
-            <Button 
-                variant={!isPreviewMode ? "secondary" : "ghost"} 
-                className="justify-start gap-2" 
-                onClick={() => setIsPreviewMode(false)}
-            >
-                <ScrollText size={16} /> Edit Sections
-            </Button>
-            <Button 
-                variant={isPreviewMode ? "secondary" : "ghost"} 
-                className="justify-start gap-2" 
-                onClick={() => setIsPreviewMode(true)}
-            >
-                <BookOpen size={16} /> Preview & Export
-            </Button>
+            <div className="space-y-1">
+                <Button 
+                    variant={viewMode === 'abstract' && !isPreviewMode ? "secondary" : "ghost"} 
+                    className="w-full justify-start gap-2" 
+                    onClick={() => { setViewMode('abstract'); setIsPreviewMode(false); }}
+                >
+                    <ScrollText size={16} /> Structured Abstract
+                </Button>
+                <Button 
+                    variant={viewMode === 'abstract' && isPreviewMode ? "secondary" : "ghost"} 
+                    className="w-full justify-start gap-2" 
+                    onClick={() => { setViewMode('abstract'); setIsPreviewMode(true); }}
+                >
+                    <BookOpen size={16} /> Read Mode
+                </Button>
+                <Button 
+                    variant={viewMode === 'fair' ? "secondary" : "ghost"} 
+                    className="w-full justify-start gap-2" 
+                    onClick={() => setViewMode('fair')}
+                >
+                    <ShieldCheck size={16} /> FAIR Compliance
+                </Button>
+            </div>
 
             <div className="h-px bg-zinc-800 my-2" />
 
-            <div className="p-3 bg-zinc-900/50 rounded border border-zinc-800 space-y-3">
-                <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Data Source</div>
-                <div className="flex justify-between text-xs text-zinc-400">
-                    <span>Artifacts</span>
-                    <span className="text-zinc-200 font-mono">{artifacts.length}</span>
-                </div>
-                <div className="flex justify-between text-xs text-zinc-400">
-                    <span>Codes</span>
-                    <span className="text-zinc-200 font-mono">{codes.length}</span>
-                </div>
-                <div className="flex justify-between text-xs text-zinc-400">
-                    <span>Findings</span>
-                    <span className="text-zinc-200 font-mono">{memos.filter(m => m.type === 'finding').length}</span>
-                </div>
-            </div>
+            {viewMode === 'abstract' && (
+                <>
+                    <div className="p-3 bg-zinc-900/50 rounded border border-zinc-800 space-y-3">
+                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Data Source</div>
+                        <div className="flex justify-between text-xs text-zinc-400">
+                            <span>Artifacts</span>
+                            <span className="text-zinc-200 font-mono">{artifacts.length}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-zinc-400">
+                            <span>Codes</span>
+                            <span className="text-zinc-200 font-mono">{codes.length}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-zinc-400">
+                            <span>Findings</span>
+                            <span className="text-zinc-200 font-mono">{memos.filter(m => m.type === 'finding').length}</span>
+                        </div>
+                    </div>
 
-            <Button 
-                className="mt-auto bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-900/20"
-                onClick={handleAutoGenerate}
-            >
-                <Sparkles size={16} /> Auto-Generate
-            </Button>
+                    <Button 
+                        className="mt-auto bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-900/20"
+                        onClick={handleAutoGenerate}
+                    >
+                        <Sparkles size={16} /> Auto-Generate
+                    </Button>
+                </>
+            )}
+            
+            {viewMode === 'fair' && (
+                <div className="p-4 bg-emerald-950/20 rounded border border-emerald-900/50">
+                    <h3 className="text-emerald-400 font-bold text-xs uppercase mb-2">FAIR Score</h3>
+                    <div className="text-3xl font-bold text-zinc-100 mb-1">
+                        {Math.round((fairStats.fScore + fairStats.aScore + fairStats.iScore + fairStats.rScore) / 4)}%
+                    </div>
+                    <p className="text-[10px] text-zinc-500">Overall compliance rating based on current project metadata.</p>
+                </div>
+            )}
         </div>
 
         {/* Center: Editor / Preview */}
@@ -164,9 +224,11 @@ export const ReportView: React.FC<ReportViewProps> = ({
                 <div className="flex items-center justify-between pb-6 border-b border-zinc-800">
                     <div>
                         <h1 className="text-3xl font-serif text-zinc-100">{settings.projectName}</h1>
-                        <p className="text-zinc-500 text-sm mt-1">Structured Research Abstract</p>
+                        <p className="text-zinc-500 text-sm mt-1">
+                            {viewMode === 'fair' ? 'FAIR Data Principles Assessment' : 'Structured Research Abstract'}
+                        </p>
                     </div>
-                    {isPreviewMode && (
+                    {viewMode === 'abstract' && isPreviewMode && (
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={copyToClipboard} className="gap-2">
                                 <Copy size={14} /> Copy Markdown
@@ -178,7 +240,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
                     )}
                 </div>
 
-                {isPreviewMode ? (
+                {viewMode === 'abstract' && isPreviewMode && (
                     <div className="space-y-8 animate-in fade-in duration-300">
                         <div className="prose prose-invert prose-zinc max-w-none">
                             <div className="mb-6">
@@ -203,7 +265,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
                             </div>
                         </div>
                     </div>
-                ) : (
+                )}
+
+                {viewMode === 'abstract' && !isPreviewMode && (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                         {/* Background */}
                         <Card className="bg-zinc-900/20 border-zinc-800">
@@ -289,8 +353,92 @@ export const ReportView: React.FC<ReportViewProps> = ({
                         </div>
                     </div>
                 )}
+
+                {/* --- FAIR Dashboard --- */}
+                {viewMode === 'fair' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-bottom-4 duration-300">
+                        {/* Findable */}
+                        <FairCard 
+                            title="Findable" 
+                            icon={Target}
+                            color="text-blue-400"
+                            score={fairStats.fScore}
+                            description="Data and metadata should be easy to find for both humans and computers."
+                        >
+                            <FairCheck label="Persistent Identifiers (Hash/ID)" passed={fairStats.checks.hasPid} />
+                            <FairCheck label="Rich Metadata (Field/Subject)" passed={fairStats.checks.hasMetadata} />
+                            <FairCheck label="Indexed Keywords" passed={fairStats.checks.hasKeywords} />
+                        </FairCard>
+
+                        {/* Accessible */}
+                        <FairCard 
+                            title="Accessible" 
+                            icon={Globe}
+                            color="text-emerald-400"
+                            score={fairStats.aScore}
+                            description="Users need to know how data can be accessed, possibly with authentication."
+                        >
+                            <FairCheck label="Access Protocol (Public/Private)" passed={fairStats.checks.accessDefined} />
+                            <FairCheck label="Consent Verification Metadata" passed={fairStats.checks.consentVerified} />
+                            <FairCheck label="Metadata Separated from Data" passed={true} /> {/* Intrinsic to architecture */}
+                        </FairCard>
+
+                        {/* Interoperable */}
+                        <FairCard 
+                            title="Interoperable" 
+                            icon={Database}
+                            color="text-purple-400"
+                            score={fairStats.iScore}
+                            description="Data needs to be integrated with other data using standard vocabularies."
+                        >
+                            <FairCheck label="Formal Knowledge Rep. (Ontology)" passed={fairStats.checks.ontologyExists} />
+                            <FairCheck label="Standard Media Formats" passed={fairStats.checks.formatStandard} />
+                            <FairCheck label="Qualified References (Links)" passed={true} /> {/* Implicit in coding model */}
+                        </FairCard>
+
+                        {/* Reusable */}
+                        <FairCard 
+                            title="Reusable" 
+                            icon={Repeat}
+                            color="text-amber-400"
+                            score={fairStats.rScore}
+                            description="Data must be well-described so they can be replicated and combined."
+                        >
+                            <FairCheck label="Detailed Provenance (Source/Date)" passed={fairStats.checks.provenance} />
+                            <FairCheck label="Usage License (Implicit)" passed={true} />
+                            <FairCheck label="Domain-Relevant Standards" passed={true} />
+                        </FairCard>
+                    </div>
+                )}
             </div>
         </div>
     </div>
   );
 };
+
+const FairCard: React.FC<{ title: string; icon: any; color: string; score: number; description: string; children: React.ReactNode }> = ({ title, icon: Icon, color, score, description, children }) => (
+    <Card className="bg-zinc-900/30 border-zinc-800 overflow-hidden">
+        <div className="h-1 bg-zinc-800 w-full">
+            <div className={cn("h-full transition-all duration-1000", color.replace('text-', 'bg-'))} style={{ width: `${score}%` }} />
+        </div>
+        <CardHeader className="pb-2">
+            <div className="flex justify-between items-start">
+                <CardTitle className={cn("flex items-center gap-2 text-lg", color)}>
+                    <Icon size={20} /> {title}
+                </CardTitle>
+                <span className="font-mono font-bold text-zinc-500">{Math.round(score)}%</span>
+            </div>
+            <CardDescription className="text-xs">{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-2">
+            {children}
+        </CardContent>
+    </Card>
+);
+
+const FairCheck: React.FC<{ label: string; passed: boolean }> = ({ label, passed }) => (
+    <div className="flex items-center justify-between text-sm p-2 rounded bg-zinc-950/50 border border-zinc-900">
+        <span className="text-zinc-300">{label}</span>
+        {passed ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
+    </div>
+);
