@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Code, Coding } from '../types';
 import { 
@@ -7,8 +8,6 @@ import {
   Plus, 
   GitMerge, 
   Loader2, 
-  Upload, 
-  Download, 
   ChevronRight, 
   ChevronDown, 
   MoreHorizontal, 
@@ -16,7 +15,6 @@ import {
   Trash2, 
   FolderOpen,
   Tag,
-  Check,
   Move
 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -40,10 +38,9 @@ interface OntologyManagerProps {
   onCreateCode: (name: string, kind?: 'code' | 'category', parentId?: string) => Promise<Code>;
   onUpdateCode: (id: string, updates: Partial<Code>) => void;
   onDeleteCode: (id: string) => void;
-  onImport: () => void;
-  onExport: () => void;
   onElaborate: () => void;
   isElaborating: boolean;
+  // onImport and onExport removed
 }
 
 // Cycle detection helper: Checks if targetId is a descendant of draggedId
@@ -62,8 +59,6 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   onCreateCode,
   onUpdateCode,
   onDeleteCode,
-  onImport,
-  onExport,
   onElaborate,
   isElaborating
 }) => {
@@ -147,15 +142,6 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                     >
                         {isElaborating ? <Loader2 size={14} className="animate-spin" /> : <GitMerge size={14} />}
                     </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400"><MoreHorizontal size={14}/></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
-                            <DropdownMenuItem onClick={onImport}><Upload size={12} className="mr-2"/> Import OWL</DropdownMenuItem>
-                            <DropdownMenuItem onClick={onExport}><Download size={12} className="mr-2"/> Export OWL</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
                 </div>
             </div>
         </div>

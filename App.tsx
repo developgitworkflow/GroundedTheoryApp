@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { LayerControl } from './components/LayerControl';
 import { ArtifactView } from './components/ArtifactView';
@@ -11,32 +12,23 @@ import { Visualizations } from './components/Visualizations';
 import { ReportView } from './components/ReportView';
 import { OntologyManager } from './components/OntologyManager'; 
 import { suggestOntology } from './services/geminiService'; 
-import { exportOntologyToOwl, parseOwlToCodes } from './lib/owlUtils'; 
 import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher, Vote, VoteStatus } from './types';
 import { 
-  FilePlus, 
-  Settings, 
   BrainCircuit,
   BookMarked,
-  StickyNote,
-  Tag,
-  ChevronDown,
-  Users,
-  GraduationCap,
-  X,
+  Settings,
   Database,
   Search,
   Lightbulb,
   Layout,
   FileText,
   CheckCircle2,
-  Plus
+  Plus,
+  Tag
 } from 'lucide-react';
 
 import { Button } from './components/ui/button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './components/ui/tabs';
-import { Badge } from './components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from './components/ui/avatar';
+import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { cn } from './lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './components/ui/hover-card';
 
@@ -181,8 +173,6 @@ export default function App() {
   const [isJournalOpen, setIsJournalOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState('codes'); 
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(INITIAL_SETTINGS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isElaborating, setIsElaborating] = useState(false);
@@ -201,9 +191,6 @@ export default function App() {
       content: '',
       categoryIds: []
   });
-
-  const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
-  const [editMemoContent, setEditMemoContent] = useState('');
 
   const activeArtifact = artifacts.find(a => a.id === activeArtifactId) || artifacts[0];
   const layersVisible = layers.reduce((acc, layer) => {
@@ -225,59 +212,6 @@ export default function App() {
   const toggleLayer = (id: LayerType) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
   };
-
-  const handleExportOwl = () => {
-    const owlString = exportOntologyToOwl(codes, projectSettings.projectName);
-    const blob = new Blob([owlString], { type: 'application/rdf+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${projectSettings.projectName.replace(/\s+/g, '_')}_ontology.owl`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    addJournalEntry("Exported ontology to OWL file", 'auto');
-  };
-
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-        const text = await file.text();
-        if (text.includes('rdf:RDF')) {
-            const importedCodes = parseOwlToCodes(text);
-            if (importedCodes.length > 0) {
-                const newCodes = [...codes];
-                let addedCount = 0;
-                importedCodes.forEach(ic => {
-                    const exists = newCodes.find(c => c.id === ic.id);
-                    if (!exists) {
-                        newCodes.push(ic);
-                        addedCount++;
-                    }
-                });
-                setCodes(newCodes);
-                addJournalEntry(`Imported OWL ontology. Added ${addedCount} new codes.`, 'auto');
-            } else {
-                alert("No valid codes found in OWL file.");
-            }
-        } else {
-            alert("File does not appear to be a valid RDF/XML OWL ontology.");
-        }
-    } catch (err) {
-        console.error(err);
-        alert("Failed to parse file.");
-    }
-    
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
 
   const handleVote = (criterionId: string, status: VoteStatus, comment?: string) => {
       setVotes(prev => {
@@ -430,6 +364,16 @@ export default function App() {
           addJournalEntry(`AI Elaborated Ontology: Linked ${updates} codes to categories.`, 'auto');
       }
       setIsElaborating(false);
+  };
+
+  const handleImportProject = (data: any) => {
+      if (data.settings) setProjectSettings(data.settings);
+      if (data.codes) setCodes(data.codes);
+      if (data.codings) setCodings(data.codings);
+      if (data.artifacts) setArtifacts(data.artifacts);
+      if (data.memos) setMemos(data.memos);
+      // Team might be partially imported or kept separate depending on auth
+      addJournalEntry(`Full Project Import Completed: ${data.settings?.projectName || 'Unknown Project'}`, 'auto');
   };
 
   return (
@@ -640,8 +584,6 @@ export default function App() {
                                         onCreateCode={handleCreateCode}
                                         onUpdateCode={handleUpdateCode}
                                         onDeleteCode={handleDeleteCode}
-                                        onImport={handleImportClick}
-                                        onExport={handleExportOwl}
                                         onElaborate={handleElaborateOntology}
                                         isElaborating={isElaborating}
                                      />
@@ -757,7 +699,10 @@ export default function App() {
             onClose={() => setIsSettingsOpen(false)}
             settings={projectSettings}
             team={researchTeam}
-            memos={memos} // Pass memos to settings for Finding management
+            memos={memos} 
+            codes={codes}
+            codings={codings}
+            artifacts={artifacts}
             activeResearcherId={activeResearcherId}
             onSave={(newSettings, newTeam, newMemos) => {
                 setProjectSettings(newSettings);
@@ -769,15 +714,7 @@ export default function App() {
                     setTheoryArtefact(prev => ({ ...prev, type: newSettings.theoryType }));
                 }
             }}
-        />
-        
-        {/* Hidden File Input for Imports */}
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileImport} 
-            accept=".owl,.xml,.rdf" 
-            className="hidden" 
+            onImportProject={handleImportProject}
         />
     </div>
   );

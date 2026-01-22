@@ -1,7 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool, Memo } from '../types';
+import { ProjectSettings, ResearchTeam, Researcher, ConsensusCriteria, Participant, ResearchQuestion, Method, Tool, Memo, Code, Coding, Artifact } from '../types';
 import { downloadBibFile } from '../lib/bibUtils';
+import { exportProjectToOwl, parseOwlToProject } from '../lib/owlUtils';
 import { 
   Settings, 
   User, 
@@ -30,7 +31,8 @@ import {
   Lightbulb,
   FileText,
   AlignLeft,
-  Tag
+  Tag,
+  Archive
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -45,8 +47,12 @@ interface SettingsDialogProps {
   settings: ProjectSettings;
   team?: ResearchTeam;
   memos?: Memo[];
+  codes: Code[];
+  codings: Coding[];
+  artifacts: Artifact[];
   activeResearcherId?: string;
   onSave: (settings: ProjectSettings, team?: ResearchTeam, memos?: Memo[]) => void;
+  onImportProject: (data: any) => void;
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ 
@@ -55,20 +61,62 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   settings, 
   team,
   memos = [],
+  codes,
+  codings,
+  artifacts,
   activeResearcherId,
-  onSave 
+  onSave,
+  onImportProject
 }) => {
   const [localSettings, setLocalSettings] = useState<ProjectSettings>(settings);
   const [localTeam, setLocalTeam] = useState<ResearchTeam>(team || { id: 'default', researchers: [], consensusCriteria: [] });
   const [localMemos, setLocalMemos] = useState<Memo[]>(memos);
   const [activeTab, setActiveTab] = useState('general');
   const bibFileInputRef = useRef<HTMLInputElement>(null);
+  const owlFileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleSave = () => {
     onSave(localSettings, localTeam, localMemos);
     onClose();
+  };
+
+  const handleExportOwl = () => {
+      const owlData = exportProjectToOwl({
+          settings: localSettings,
+          team: localTeam,
+          memos: localMemos,
+          codes,
+          codings,
+          artifacts
+      });
+      const blob = new Blob([owlData], { type: 'application/rdf+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${localSettings.projectName.replace(/\s+/g, '_')}_full_project.owl`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleImportOwl = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+          const text = await file.text();
+          const importedProject = parseOwlToProject(text);
+          if (confirm("This will overwrite all current project data. Continue?")) {
+              onImportProject(importedProject);
+              onClose();
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Failed to parse OWL file.");
+      }
+      if (owlFileInputRef.current) owlFileInputRef.current.value = '';
   };
 
   // --- Helpers for updating nested state ---
@@ -308,6 +356,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
         accept=".bib,.txt" 
         className="hidden" 
       />
+      <input 
+        type="file" 
+        ref={owlFileInputRef} 
+        onChange={handleImportOwl} 
+        accept=".owl,.xml,.rdf" 
+        className="hidden" 
+      />
       
       <div className="w-[900px] h-[700px] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
@@ -450,6 +505,21 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 />
                              </div>
                         </div>
+
+                        <div className="h-px bg-zinc-800 my-4" />
+
+                        <SectionHeader title="Data Management" description="Backup and restore full project state." />
+                        <div className="flex gap-4">
+                            <Button variant="outline" className="flex-1 gap-2 border-zinc-700" onClick={handleExportOwl}>
+                                <Download size={14}/> Export Project (OWL)
+                            </Button>
+                            <Button variant="outline" className="flex-1 gap-2 border-zinc-700" onClick={() => owlFileInputRef.current?.click()}>
+                                <Upload size={14}/> Import Project (OWL)
+                            </Button>
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-2">
+                            Exports include codes, ontology, memos, settings, and artifacts in RDF/XML format compliant with Stratum Schema.
+                        </p>
                     </div>
                 )}
 
