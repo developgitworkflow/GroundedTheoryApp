@@ -13,7 +13,7 @@ import {
   ChevronDown, 
   MoreHorizontal, 
   Edit2, 
-  Trash2,
+  Trash2, 
   FolderOpen,
   Tag,
   Check,
@@ -99,7 +99,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 border-r border-zinc-800">
+    <div className="flex flex-col h-full bg-zinc-900">
         {/* Top Toolbar */}
         <div className="p-3 border-b border-zinc-800 space-y-3 bg-zinc-950">
             {/* Search */}
@@ -217,8 +217,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   );
 };
 
-// --- Tree Item Component ---
-
+// ... (Rest of the file remains unchanged: TreeItem, OntologyTable, components)
 interface TreeItemProps {
     code: Code;
     allCodes: Code[];
@@ -381,8 +380,6 @@ const TreeItem: React.FC<TreeItemProps> = ({
         </div>
     );
 };
-
-// --- Table View Component ---
 
 interface TableProps {
     codes: Code[];

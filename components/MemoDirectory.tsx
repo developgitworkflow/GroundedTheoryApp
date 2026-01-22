@@ -39,7 +39,7 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 border-l border-zinc-800">
+    <div className="flex flex-col h-full bg-zinc-900">
         {/* Header */}
         <div className="p-4 border-b border-zinc-800 bg-zinc-950">
             <h3 className="font-bold text-zinc-200 text-sm uppercase tracking-wider flex items-center gap-2">

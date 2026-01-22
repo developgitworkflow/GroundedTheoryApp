@@ -29,7 +29,8 @@ import {
   Lightbulb,
   Layout,
   FileText,
-  CheckCircle2
+  CheckCircle2,
+  Plus
 } from 'lucide-react';
 
 import { Button } from './components/ui/button';
@@ -521,63 +522,13 @@ export default function App() {
                 {/* ANALYSIS STAGE */}
                 {activeTab === 'analyze' && (
                     <div className="flex h-full">
-                        {/* Left Sidebar: Artifacts & Codes */}
-                        <div className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col">
-                             <div className="flex border-b border-zinc-800 bg-zinc-950">
-                                 <button 
-                                     onClick={() => setSidebarTab('artifacts')}
-                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'artifacts' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
-                                 >
-                                     Documents
-                                 </button>
-                                 <button 
-                                     onClick={() => setSidebarTab('codes')}
-                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'codes' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
-                                 >
-                                     Code System
-                                 </button>
-                             </div>
-
-                             <div className="flex-1 overflow-hidden">
-                                 {sidebarTab === 'artifacts' ? (
-                                     <div className="h-full overflow-y-auto p-2 space-y-1">
-                                         {artifacts.map(art => (
-                                             <div 
-                                                 key={art.id}
-                                                 onClick={() => setActiveArtifactId(art.id)}
-                                                 className={cn(
-                                                     "p-2 rounded cursor-pointer text-sm flex items-center gap-2",
-                                                     activeArtifactId === art.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800/50"
-                                                 )}
-                                             >
-                                                 {art.media === 'text' ? <FileText size={14} /> : <Tag size={14}/>}
-                                                 <span className="truncate">{art.name}</span>
-                                             </div>
-                                         ))}
-                                         <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-zinc-500 border border-dashed border-zinc-800" onClick={() => handleCreateArtifact()}>
-                                             <Plus size={12} className="mr-2"/> Import
-                                         </Button>
-                                     </div>
-                                 ) : (
-                                     <OntologyManager 
-                                        codes={codes}
-                                        codings={codings}
-                                        onNodeClick={(id) => setCodeFilter(id === codeFilter ? null : id)}
-                                        selectedCodeId={codeFilter}
-                                        onCreateCode={handleCreateCode}
-                                        onUpdateCode={handleUpdateCode}
-                                        onDeleteCode={handleDeleteCode}
-                                        onImport={handleImportClick}
-                                        onExport={handleExportOwl}
-                                        onElaborate={handleElaborateOntology}
-                                        isElaborating={isElaborating}
-                                     />
-                                 )}
-                             </div>
+                        {/* LEFT SIDEBAR: Layers */}
+                        <div className="h-full z-20">
+                             <LayerControl layers={layers} toggleLayer={toggleLayer} />
                         </div>
 
-                        {/* Middle: Artifact View */}
-                        <div className="flex-1 relative">
+                        {/* MIDDLE: Artifact View */}
+                        <div className="flex-1 relative flex flex-col h-full min-w-0">
                             {activeArtifact ? (
                                 <>
                                     <ArtifactView 
@@ -619,10 +570,7 @@ export default function App() {
                                         onUpdateArtifact={handleUpdateArtifact}
                                         participants={projectSettings.participants}
                                     />
-                                    {/* Layer Control Overlay */}
-                                    <div className="absolute top-4 right-4 z-10">
-                                        <LayerControl layers={layers} toggleLayer={toggleLayer} />
-                                    </div>
+                                    {/* Removed Floating Layer Control Overlay */}
                                     <TheoryGraph 
                                         codes={codes} 
                                         codings={codings} 
@@ -638,19 +586,81 @@ export default function App() {
                             )}
                         </div>
 
-                        {/* Right: Memo Directory (Collapsible or just small) */}
-                        <div className="w-64 bg-zinc-900 border-l border-zinc-800 hidden xl:block">
-                             <MemoDirectory 
-                                memos={memos} 
-                                artifacts={artifacts} 
-                                onSelectMemo={(m) => {
-                                    if(m.relatedIds.length > 0) {
-                                        const artId = m.relatedIds[0];
-                                        setActiveArtifactId(artId);
-                                        // Highlight logic could go here
-                                    }
-                                }}
-                            />
+                        {/* RIGHT SIDEBAR: Artifacts & Codes & Memos */}
+                        <div className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col shrink-0">
+                             <div className="flex border-b border-zinc-800 bg-zinc-950">
+                                 <button 
+                                     onClick={() => setSidebarTab('artifacts')}
+                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'artifacts' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
+                                 >
+                                     Documents
+                                 </button>
+                                 <button 
+                                     onClick={() => setSidebarTab('codes')}
+                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'codes' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
+                                 >
+                                     Codes
+                                 </button>
+                                 <button 
+                                     onClick={() => setSidebarTab('memos')}
+                                     className={cn("flex-1 py-3 text-xs font-medium border-b-2 transition-colors", sidebarTab === 'memos' ? "border-blue-500 text-zinc-200" : "border-transparent text-zinc-500 hover:text-zinc-300")}
+                                 >
+                                     Memos
+                                 </button>
+                             </div>
+
+                             <div className="flex-1 overflow-hidden">
+                                 {sidebarTab === 'artifacts' && (
+                                     <div className="h-full overflow-y-auto p-2 space-y-1">
+                                         {artifacts.map(art => (
+                                             <div 
+                                                 key={art.id}
+                                                 onClick={() => setActiveArtifactId(art.id)}
+                                                 className={cn(
+                                                     "p-2 rounded cursor-pointer text-sm flex items-center gap-2",
+                                                     activeArtifactId === art.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800/50"
+                                                 )}
+                                             >
+                                                 {art.media === 'text' ? <FileText size={14} /> : <Tag size={14}/>}
+                                                 <span className="truncate">{art.name}</span>
+                                             </div>
+                                         ))}
+                                         <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-zinc-500 border border-dashed border-zinc-800" onClick={() => handleCreateArtifact()}>
+                                             <Plus size={12} className="mr-2"/> Import
+                                         </Button>
+                                     </div>
+                                 )} 
+                                 
+                                 {sidebarTab === 'codes' && (
+                                     <OntologyManager 
+                                        codes={codes}
+                                        codings={codings}
+                                        onNodeClick={(id) => setCodeFilter(id === codeFilter ? null : id)}
+                                        selectedCodeId={codeFilter}
+                                        onCreateCode={handleCreateCode}
+                                        onUpdateCode={handleUpdateCode}
+                                        onDeleteCode={handleDeleteCode}
+                                        onImport={handleImportClick}
+                                        onExport={handleExportOwl}
+                                        onElaborate={handleElaborateOntology}
+                                        isElaborating={isElaborating}
+                                     />
+                                 )}
+
+                                 {sidebarTab === 'memos' && (
+                                     <MemoDirectory 
+                                        memos={memos} 
+                                        artifacts={artifacts} 
+                                        onSelectMemo={(m) => {
+                                            if(m.relatedIds.length > 0) {
+                                                const artId = m.relatedIds[0];
+                                                setActiveArtifactId(artId);
+                                                // Highlight logic could go here
+                                            }
+                                        }}
+                                    />
+                                 )}
+                             </div>
                         </div>
                     </div>
                 )}
