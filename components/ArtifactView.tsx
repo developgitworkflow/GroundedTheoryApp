@@ -103,17 +103,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
     return relevant;
   }, [codings, artifact.id, layersVisible, selectedCodeId]);
 
-  // For Context Rail
-  const uniqueCodesInArtifact = useMemo(() => {
-    const relevantCodings = codings.filter(c => c.artifactId === artifact.id);
-    const codeIds = new Set(relevantCodings.map(c => c.codeId));
-    return codes.filter(c => codeIds.has(c.id));
-  }, [codings, artifact.id, codes]);
-
-  const memosInArtifact = useMemo(() => {
-    return memos.filter(m => m.relatedIds.includes(artifact.id));
-  }, [memos, artifact.id]);
-
   const paragraphs = useMemo(() => {
     let currentIndex = 0;
     return artifact.content.split('\n').map((text, index) => {
@@ -698,81 +687,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                 </div>
                             );
                         })}
-                    </div>
-                </div>
-            </div>
-
-            {/* Context Rail (Right) */}
-            <div className="w-80 border-l border-zinc-800 bg-zinc-950/50 p-4 overflow-y-auto hidden xl:block">
-                <div className="space-y-6">
-                    <div>
-                        <h3 className="text-xs font-bold uppercase text-zinc-500 mb-3 flex items-center gap-2">
-                            <Tag size={12} /> Grounded Concepts
-                        </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {uniqueCodesInArtifact.length === 0 && <span className="text-xs text-zinc-600 italic">No codes applied.</span>}
-                            {uniqueCodesInArtifact.map(code => (
-                                <div 
-                                    key={code.id}
-                                    className="cursor-help"
-                                    onMouseEnter={() => handleCodeHover(code)}
-                                    onMouseLeave={handleLeaveHover}
-                                >
-                                    <Badge 
-                                        variant="outline" 
-                                        className="gap-1.5 pl-1.5 pr-2 py-1 border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800 hover:border-zinc-700 transition-all group"
-                                        style={{ color: code.color, borderColor: `${code.color}20` }}
-                                    >
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
-                                        {code.name}
-                                    </Badge>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-xs font-bold uppercase text-zinc-500 mb-3 flex items-center gap-2">
-                            <StickyNote size={12} /> Annotations
-                        </h3>
-                        <div className="space-y-3">
-                            {memosInArtifact.length === 0 && <span className="text-xs text-zinc-600 italic">No annotations.</span>}
-                            {memosInArtifact.map(memo => (
-                                <Card 
-                                    key={memo.id} 
-                                    className="bg-zinc-900/40 border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700 transition-colors cursor-help group"
-                                    onMouseEnter={() => handleMemoHover(memo)}
-                                    onMouseLeave={handleLeaveHover}
-                                    onClick={() => handleMemoClick(memo)}
-                                >
-                                    <CardContent className="p-3">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <Badge variant="outline" className="text-[9px] h-4 border-amber-900/30 text-amber-500 bg-amber-900/10">
-                                                #{memo.number}
-                                            </Badge>
-                                            <span className="text-[10px] text-zinc-600">{new Date(memo.createdAt).toLocaleDateString()}</span>
-                                        </div>
-                                        <p className="text-xs text-zinc-300 line-clamp-3 leading-snug italic font-serif opacity-80 group-hover:opacity-100">
-                                            "{memo.content}"
-                                        </p>
-                                        <div className="mt-2 pt-2 border-t border-zinc-800/50 flex items-center gap-2">
-                                            <div className="w-4 h-4 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[8px] text-zinc-400">
-                                                {researchTeam?.researchers.find(r => r.id === memo.authorId)?.initials || 'U'}
-                                            </div>
-                                            <span className="text-[10px] text-zinc-500">{memo.type}</span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </div>
-                    
-                    <div className="p-3 bg-zinc-900/30 border border-zinc-800/50 rounded flex items-center gap-2">
-                        <Activity size={14} className="text-blue-500" />
-                        <div className="flex-1">
-                            <div className="text-[10px] font-bold text-zinc-400 uppercase">Theory Network</div>
-                            <div className="text-[10px] text-zinc-500">Overlay active (Toggle via layers)</div>
-                        </div>
                     </div>
                 </div>
             </div>
