@@ -23,13 +23,20 @@ import {
   FileText,
   CheckCircle2,
   Plus,
-  Tag
+  Tag,
+  GitMerge,
+  ArrowRight,
+  AlertTriangle,
+  FolderInput,
+  Network
 } from 'lucide-react';
 
 import { Button } from './components/ui/button';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { cn } from './lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './components/ui/hover-card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './components/ui/card';
+import { Badge } from './components/ui/badge';
 
 const INITIAL_LAYERS: LayerConfig[] = [
   { id: LayerType.ARTIFACT, label: 'Artifact Source', visible: true, color: '#fff' },
@@ -181,6 +188,9 @@ export default function App() {
   const [votes, setVotes] = useState<Vote[]>([]); 
 
   const [codeFilter, setCodeFilter] = useState<string | null>(null);
+  
+  // Drag Action State (Replacing pure Merge state)
+  const [dragAction, setDragAction] = useState<{source: Code, target: Code} | null>(null);
 
   const activeResearcher = researchTeam.researchers.find(r => r.id === activeResearcherId) || researchTeam.researchers[0];
   
@@ -318,6 +328,61 @@ export default function App() {
       setCodes(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
   };
 
+  const handleCodeDrop = (sourceId: string, targetId: string) => {
+      const source = codes.find(c => c.id === sourceId);
+      const target = codes.find(c => c.id === targetId);
+      if (source && target) {
+          setDragAction({ source, target });
+      }
+  };
+
+  const executeMerge = () => {
+      if (!dragAction) return;
+      const { source, target } = dragAction;
+      const sourceId = source.id;
+      const targetId = target.id;
+
+      // 1. Remap codings
+      setCodings(prev => prev.map(c => c.codeId === sourceId ? { ...c, codeId: targetId } : c));
+      
+      // 2. Remap children (if source was a category) to the new target
+      setCodes(prev => prev.map(c => {
+          if (c.id === sourceId) return null; // Remove source
+          if (c.parentId === sourceId) return { ...c, parentId: targetId === c.id ? undefined : targetId }; // Move children
+          return c;
+      }).filter(Boolean) as Code[]);
+      
+      addJournalEntry(`Merged code [${source.name}] into [${target.name}]`, 'auto');
+      setDragAction(null);
+  };
+
+  const executeNest = () => {
+      if (!dragAction) return;
+      const { source, target } = dragAction;
+      
+      // Check for cycles
+      const isDescendant = (tId: string, sId: string): boolean => {
+          if (tId === sId) return true;
+          const t = codes.find(c => c.id === tId);
+          if (t && t.parentId) return isDescendant(t.parentId, sId);
+          return false;
+      };
+
+      if (isDescendant(target.id, source.id)) {
+          alert("Cannot nest a category into its own descendant.");
+          return;
+      }
+
+      handleUpdateCode(source.id, { parentId: target.id });
+      // Ensure target is a category
+      if (target.kind === 'code') {
+          handleUpdateCode(target.id, { kind: 'category' });
+      }
+      
+      addJournalEntry(`Nested [${source.name}] under [${target.name}]`, 'auto');
+      setDragAction(null);
+  };
+
   const handleDeleteCode = (id: string) => {
       if(confirm('Delete this code/category? This will also remove associated codings.')) {
           setCodes(prev => prev.filter(c => c.id !== id && c.parentId !== id)); 
@@ -378,6 +443,79 @@ export default function App() {
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans selection:bg-blue-500/30">
         
+        {/* DRAG ACTION DIALOG */}
+        {dragAction && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                <Card className="w-[500px] border-zinc-800 bg-zinc-950 shadow-2xl animate-in zoom-in-95 overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-amber-600" />
+                    
+                    <CardHeader className="pb-4 pt-6 border-b border-zinc-900 bg-zinc-900/30">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                            <Network className="text-zinc-400" /> Resolve Code Interaction
+                        </CardTitle>
+                    </CardHeader>
+                    
+                    <CardContent className="space-y-8 pt-8 px-8">
+                        {/* Visualization */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col items-center gap-2 w-1/3 p-3 rounded-lg bg-zinc-900 border border-zinc-800 relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                                <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: dragAction.source.color }} />
+                                <span className="text-sm font-bold text-zinc-200 truncate w-full text-center">{dragAction.source.name}</span>
+                                <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-zinc-500 border-zinc-800">Source</Badge>
+                            </div>
+                            
+                            <ArrowRight size={24} className="text-zinc-600 animate-pulse" />
+
+                            <div className="flex flex-col items-center gap-2 w-1/3 p-3 rounded-lg bg-zinc-900 border border-zinc-800 relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-amber-500/5 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                                <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: dragAction.target.color }} />
+                                <span className="text-sm font-bold text-zinc-200 truncate w-full text-center">{dragAction.target.name}</span>
+                                <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-zinc-500 border-zinc-800">Target</Badge>
+                            </div>
+                        </div>
+
+                        {/* Options */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <button 
+                                onClick={executeMerge}
+                                className="flex flex-col items-start p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-amber-900/20 hover:border-amber-700/50 transition-all group"
+                            >
+                                <div className="flex items-center gap-2 mb-2">
+                                    <GitMerge className="text-zinc-500 group-hover:text-amber-500 transition-colors" size={20} />
+                                    <span className="font-bold text-zinc-300 group-hover:text-amber-400">Merge Into</span>
+                                </div>
+                                <p className="text-xs text-zinc-500 text-left leading-relaxed">
+                                    Combine usages. 
+                                    <span className="text-zinc-400 font-bold mx-1">{dragAction.source.name}</span> 
+                                    will be deleted and its codings moved to Target.
+                                </p>
+                            </button>
+
+                            <button 
+                                onClick={executeNest}
+                                className="flex flex-col items-start p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-blue-900/20 hover:border-blue-700/50 transition-all group"
+                            >
+                                <div className="flex items-center gap-2 mb-2">
+                                    <FolderInput className="text-zinc-500 group-hover:text-blue-500 transition-colors" size={20} />
+                                    <span className="font-bold text-zinc-300 group-hover:text-blue-400">Group / Nest</span>
+                                </div>
+                                <p className="text-xs text-zinc-500 text-left leading-relaxed">
+                                    Keep both. 
+                                    <span className="text-zinc-400 font-bold mx-1">{dragAction.source.name}</span> 
+                                    becomes a child of Target. Target becomes a Category.
+                                </p>
+                            </button>
+                        </div>
+                    </CardContent>
+                    
+                    <CardFooter className="flex justify-end p-4 bg-zinc-900/30 border-t border-zinc-900">
+                        <Button variant="ghost" onClick={() => setDragAction(null)}>Cancel</Button>
+                    </CardFooter>
+                </Card>
+            </div>
+        )}
+
         {/* Main Layout */}
         <div className="flex-1 flex overflow-hidden">
             
@@ -582,6 +720,7 @@ export default function App() {
                                         selectedCodeId={codeFilter}
                                         onCreateCode={handleCreateCode}
                                         onUpdateCode={handleUpdateCode}
+                                        onCodeDrop={handleCodeDrop}
                                         onDeleteCode={handleDeleteCode}
                                         onElaborate={handleElaborateOntology}
                                         isElaborating={isElaborating}

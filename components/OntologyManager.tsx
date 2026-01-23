@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Code, Coding } from '../types';
 import { 
@@ -38,18 +37,11 @@ interface OntologyManagerProps {
   selectedCodeId?: string | null;
   onCreateCode: (name: string, kind?: 'code' | 'category', parentId?: string) => Promise<Code>;
   onUpdateCode: (id: string, updates: Partial<Code>) => void;
+  onCodeDrop: (sourceId: string, targetId: string) => void;
   onDeleteCode: (id: string) => void;
   onElaborate: () => void;
   isElaborating: boolean;
 }
-
-// Cycle detection helper: Checks if targetId is a descendant of draggedId
-const isDescendant = (targetId: string, draggedId: string, allCodes: Code[]): boolean => {
-    if (targetId === draggedId) return true;
-    const target = allCodes.find(c => c.id === targetId);
-    if (!target || !target.parentId) return false;
-    return isDescendant(target.parentId, draggedId, allCodes);
-};
 
 export const OntologyManager: React.FC<OntologyManagerProps> = ({
   codes,
@@ -58,6 +50,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   selectedCodeId,
   onCreateCode,
   onUpdateCode,
+  onCodeDrop,
   onDeleteCode,
   onElaborate,
   isElaborating
@@ -94,7 +87,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900">
+    <div className="flex flex-col h-full bg-zinc-900 relative">
         {/* Top Toolbar */}
         <div className="p-3 border-b border-zinc-800 space-y-3 bg-zinc-950">
             {/* Search */}
@@ -170,6 +163,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                             selectedCodeId={selectedCodeId}
                             onNodeClick={onNodeClick}
                             onUpdateCode={onUpdateCode}
+                            onCodeDrop={onCodeDrop}
                             onDeleteCode={onDeleteCode}
                             onCreateCode={onCreateCode}
                         />
@@ -212,13 +206,14 @@ interface TreeItemProps {
     selectedCodeId?: string | null;
     onNodeClick: (id: string) => void;
     onUpdateCode: (id: string, updates: Partial<Code>) => void;
+    onCodeDrop: (sourceId: string, targetId: string) => void;
     onDeleteCode: (id: string) => void;
     onCreateCode: (name: string, kind?: 'code' | 'category', parentId?: string) => Promise<Code>;
 }
 
 const TreeItem: React.FC<TreeItemProps> = ({ 
     code, allCodes, codings, depth, searchTerm, selectedCodeId, 
-    onNodeClick, onUpdateCode, onDeleteCode, onCreateCode 
+    onNodeClick, onUpdateCode, onCodeDrop, onDeleteCode, onCreateCode 
 }) => {
     const children = allCodes.filter(c => c.parentId === code.id);
     const [isOpen, setIsOpen] = useState(true);
@@ -238,7 +233,6 @@ const TreeItem: React.FC<TreeItemProps> = ({
     };
 
     const handleDragOver = (e: React.DragEvent) => {
-        if (!isCategory) return;
         e.preventDefault();
         e.stopPropagation();
         if (!isDragOver) setIsDragOver(true);
@@ -251,7 +245,6 @@ const TreeItem: React.FC<TreeItemProps> = ({
     };
 
     const handleDrop = (e: React.DragEvent) => {
-        if (!isCategory) return;
         e.preventDefault();
         e.stopPropagation();
         setIsDragOver(false);
@@ -259,14 +252,10 @@ const TreeItem: React.FC<TreeItemProps> = ({
         const draggedId = e.dataTransfer.getData('text/plain');
         if (draggedId === code.id) return;
 
-        // Check for cycles
-        if (isDescendant(code.id, draggedId, allCodes)) {
-            alert("Cannot move a category into its own descendant.");
-            return;
-        }
-
-        onUpdateCode(draggedId, { parentId: code.id });
-        if(!isOpen) setIsOpen(true); // Auto expand on drop
+        // Delegate to global handler for disambiguation
+        onCodeDrop(draggedId, code.id);
+        
+        if(!isOpen) setIsOpen(true); 
     };
 
     if (searchTerm && !matches && !hasMatchingChildren) return null;
@@ -275,9 +264,9 @@ const TreeItem: React.FC<TreeItemProps> = ({
         <div className="select-none text-sm">
              <div 
                 className={cn(
-                    "group flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-all border border-transparent",
+                    "group flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-all border border-transparent relative",
                     selectedCodeId === code.id ? "bg-blue-900/20 border-blue-900/50" : "hover:bg-zinc-800/80",
-                    isDragOver ? "bg-zinc-800 ring-2 ring-blue-500/50 z-10 relative" : ""
+                    isDragOver ? "bg-zinc-800 ring-1 ring-blue-500/50 z-10 shadow-lg" : ""
                 )}
                 style={{ marginLeft: `${depth * 12}px` }}
                 onClick={() => onNodeClick(code.id)}
@@ -310,7 +299,7 @@ const TreeItem: React.FC<TreeItemProps> = ({
                     {code.name}
                 </span>
 
-                <span className="text-[10px] text-zinc-600 font-mono w-6 text-right">
+                <span className={cn("text-[10px] text-zinc-600 font-mono w-6 text-right", isDragOver && "opacity-0")}>
                     {usageCount}
                 </span>
                 
@@ -320,7 +309,7 @@ const TreeItem: React.FC<TreeItemProps> = ({
                 {/* Context Menu Trigger (Visible on Hover) */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                         <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <Button variant="ghost" size="icon" className={cn("h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity", isDragOver && "opacity-0 pointer-events-none")}>
                              <MoreHorizontal size={12} className="text-zinc-400" />
                          </Button>
                     </DropdownMenuTrigger>
@@ -369,6 +358,7 @@ const TreeItem: React.FC<TreeItemProps> = ({
                     selectedCodeId={selectedCodeId}
                     onNodeClick={onNodeClick}
                     onUpdateCode={onUpdateCode}
+                    onCodeDrop={onCodeDrop}
                     onDeleteCode={onDeleteCode}
                     onCreateCode={onCreateCode}
                 />

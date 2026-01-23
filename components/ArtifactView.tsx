@@ -64,6 +64,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   participants = []
 }) => {
   const [selection, setSelection] = useState<{start: number, end: number, text: string, rect: DOMRect} | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestedCodesList, setSuggestedCodesList] = useState<string[]>([]);
   const [memoInput, setMemoInput] = useState('');
@@ -77,6 +78,13 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const memoRefs = useRef<Record<string, HTMLElement | null>>({});
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close context menu on global click
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
 
   // Scroll to memo if highlighted
   useEffect(() => {
@@ -229,13 +237,6 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         const pIdx = parseInt(paraIndexAttr);
         const para = paragraphs[pIdx];
         
-        // Naive text search within paragraph to find offset. 
-        // Note: This relies on the rendered text matching source text characters (minus hidden markdown syntax)
-        // Since our Sanitized Renderer keeps syntax in DOM (just hidden), standard selection.toString() 
-        // might SKIP hidden elements or include them depending on browser.
-        // We will assume for this MVP that the user selects "visible" text and we find that 
-        // visible text in the source paragraph.
-        
         const startInPara = para.text.indexOf(text); 
         if (startInPara !== -1) {
             const absStart = para.start + startInPara;
@@ -251,13 +252,19 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             setShowMemoInput(false);
             setSuggestedCodesList([]);
         } else {
-            // Fallback: If exact match fails (due to markdown chars), we might try fuzzy or 
-            // just use the paragraph boundaries if it's a block selection.
-            // For now, clear selection to avoid bad data.
             console.warn("Could not map selection to source accurately.");
             setSelection(null);
         }
     }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+      const sel = window.getSelection();
+      // Only show custom menu if we have a valid selection in the app state
+      if (sel && !sel.isCollapsed && selection) {
+          e.preventDefault();
+          setContextMenu({ x: e.clientX, y: e.clientY });
+      }
   };
 
   const clearSelection = () => {
@@ -460,8 +467,55 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
             )}
         </div>
 
+        {/* Custom Context Menu */}
+        {contextMenu && (
+            <div 
+                className="fixed z-[60] bg-zinc-950 border border-zinc-800 rounded-lg shadow-xl p-1.5 min-w-[180px] animate-in fade-in zoom-in-95 flex flex-col gap-1"
+                style={{ top: contextMenu.y, left: contextMenu.x }}
+                onContextMenu={(e) => e.preventDefault()}
+            >
+                <div className="px-2 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                    Selection Actions
+                </div>
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleGetSuggestions();
+                        setContextMenu(null);
+                    }}
+                    className="w-full text-left px-2 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-white rounded-md flex items-center gap-2 transition-colors"
+                >
+                    <Wand2 size={14} className="text-purple-400" />
+                    AI Suggest Codes
+                </button>
+                 <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMemoInput(true);
+                        setContextMenu(null);
+                    }}
+                    className="w-full text-left px-2 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-white rounded-md flex items-center gap-2 transition-colors"
+                >
+                    <MessageSquare size={14} className="text-blue-400" />
+                    Attach Memo
+                </button>
+                <div className="h-px bg-zinc-800 my-0.5" />
+                <button 
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setContextMenu(null);
+                        setSelection(null);
+                    }}
+                    className="w-full text-left px-2 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-red-400 rounded-md flex items-center gap-2 transition-colors"
+                >
+                    <X size={14} />
+                    Dismiss Selection
+                </button>
+            </div>
+        )}
+
         {/* Helper Toolbar */}
-        {selection && (
+        {selection && !contextMenu && (
             <div 
                 className="fixed z-50 bg-zinc-950 border border-zinc-700 shadow-2xl rounded-lg w-[340px] animate-in fade-in zoom-in-95 flex flex-col overflow-hidden"
                 style={{ 
@@ -563,7 +617,11 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         <div className="flex-1 flex overflow-hidden">
             
             {/* Editor Area (Sanitized View) */}
-            <div className="flex-1 overflow-y-auto min-w-[300px]" onMouseUp={handleMouseUp}>
+            <div 
+                className="flex-1 overflow-y-auto min-w-[300px]" 
+                onMouseUp={handleMouseUp}
+                onContextMenu={handleContextMenu}
+            >
                 <div className="min-h-full pb-20">
                     
                     {/* Header */}
