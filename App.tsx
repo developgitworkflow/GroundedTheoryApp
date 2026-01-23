@@ -307,9 +307,9 @@ export default function App() {
     addJournalEntry(`Coded segment "${coding.textSnippet.substring(0, 20)}..." as [${codeName}]`, 'auto');
   };
 
-  const handleCreateCode = async (name: string, kind: 'code' | 'category' = 'code', parentId?: string): Promise<Code> => {
+  const handleCreateCode = async (name: string, kind: 'code' | 'category' = 'code', parentId?: string, description?: string, color?: string): Promise<Code> => {
     const colors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const randomColor = color || colors[Math.floor(Math.random() * colors.length)];
     
     const newCode: Code = {
       id: `code-${Date.now()}`,
@@ -317,6 +317,7 @@ export default function App() {
       color: randomColor,
       kind,
       parentId,
+      description,
       relatedCodeIds: []
     };
     setCodes(prev => [...prev, newCode]);

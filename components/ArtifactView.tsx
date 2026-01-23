@@ -564,6 +564,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                              <CommandInput placeholder="Search codebook..." autoFocus />
                              <CommandList>
                                  <CommandEmpty className="py-2 text-xs text-zinc-500">No matching codes.</CommandEmpty>
+                                 
                                  {suggestedCodesList.length > 0 && (
                                      <CommandGroup heading="AI Suggestions">
                                          {suggestedCodesList.map(c => (
@@ -573,14 +574,32 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                          ))}
                                      </CommandGroup>
                                  )}
-                                 <CommandGroup heading="Existing Codes">
-                                     {codes.map(code => (
-                                         <CommandItem key={code.id} value={code.name} onSelect={() => applyCode(code.name, code.id)}>
-                                             <div className="mr-2 w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
-                                             {code.name}
-                                         </CommandItem>
-                                     ))}
-                                 </CommandGroup>
+
+                                 {/* Categories Group */}
+                                 {codes.some(c => c.kind === 'category') && (
+                                     <CommandGroup heading="Structural Categories">
+                                         {codes.filter(c => c.kind === 'category').map(code => (
+                                             <CommandItem key={code.id} value={code.name} onSelect={() => applyCode(code.name, code.id)}>
+                                                 <FolderTree size={12} className="mr-2 text-amber-500/80" /> 
+                                                 <span className="font-medium text-amber-100/80 flex-1">{code.name}</span>
+                                                 {code.isCore && <Badge variant="outline" className="ml-auto text-[8px] h-3 px-1 border-amber-500/50 text-amber-500">CORE</Badge>}
+                                             </CommandItem>
+                                         ))}
+                                     </CommandGroup>
+                                 )}
+
+                                 {/* Codes Group */}
+                                 {codes.some(c => c.kind === 'code') && (
+                                     <CommandGroup heading="Open Codes">
+                                         {codes.filter(c => c.kind === 'code').map(code => (
+                                             <CommandItem key={code.id} value={code.name} onSelect={() => applyCode(code.name, code.id)}>
+                                                 <Tag size={12} className="mr-2" style={{ color: code.color }} />
+                                                 <span>{code.name}</span>
+                                             </CommandItem>
+                                         ))}
+                                     </CommandGroup>
+                                 )}
+
                                  <CommandGroup heading="Actions">
                                      <CommandItem onSelect={() => {
                                          const name = prompt("Name for new code:");

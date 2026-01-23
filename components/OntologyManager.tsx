@@ -15,7 +15,8 @@ import {
   FolderOpen,
   Tag,
   Move,
-  CornerDownRight
+  CornerDownRight,
+  BookType
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -29,13 +30,14 @@ import {
   DropdownMenuLabel 
 } from './ui/dropdown-menu';
 import { Badge } from './ui/badge';
+import { CodeEditDialog } from './CodeEditDialog';
 
 interface OntologyManagerProps {
   codes: Code[];
   codings: Coding[];
   onNodeClick: (id: string) => void;
   selectedCodeId?: string | null;
-  onCreateCode: (name: string, kind?: 'code' | 'category', parentId?: string) => Promise<Code>;
+  onCreateCode: (name: string, kind?: 'code' | 'category', parentId?: string, description?: string, color?: string) => Promise<Code>;
   onUpdateCode: (id: string, updates: Partial<Code>) => void;
   onCodeDrop: (sourceId: string, targetId: string) => void;
   onDeleteCode: (id: string) => void;
@@ -59,9 +61,42 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isRootDragOver, setIsRootDragOver] = useState(false);
   
+  // Dialog State
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [editingCode, setEditingCode] = useState<Partial<Code> | undefined>(undefined);
+  const [targetParentId, setTargetParentId] = useState<string | undefined>(undefined);
+
   // -- Tree Logic --
   const rootCodes = useMemo(() => codes.filter(c => !c.parentId), [codes]);
   
+  // Handlers
+  const handleOpenCreate = (parentId?: string) => {
+      setDialogMode('create');
+      setEditingCode(undefined);
+      setTargetParentId(parentId);
+      setIsDialogOpen(true);
+  };
+
+  const handleOpenEdit = (code: Code) => {
+      setDialogMode('edit');
+      setEditingCode(code);
+      setIsDialogOpen(true);
+  };
+
+  const handleDialogSave = (data: { name: string; kind: 'code' | 'category'; color: string; description: string }) => {
+      if (dialogMode === 'create') {
+          onCreateCode(data.name, data.kind, targetParentId, data.description, data.color);
+      } else if (dialogMode === 'edit' && editingCode?.id) {
+          onUpdateCode(editingCode.id, {
+              name: data.name,
+              kind: data.kind,
+              color: data.color,
+              description: data.description
+          });
+      }
+  };
+
   // Root Drop Handlers
   const handleRootDragOver = (e: React.DragEvent) => {
       e.preventDefault();
@@ -88,6 +123,15 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 relative">
+        <CodeEditDialog 
+            isOpen={isDialogOpen}
+            onClose={() => setIsDialogOpen(false)}
+            onSave={handleDialogSave}
+            initialData={editingCode}
+            mode={dialogMode}
+            parentId={targetParentId}
+        />
+
         {/* Top Toolbar */}
         <div className="p-3 border-b border-zinc-800 space-y-3 bg-zinc-950">
             {/* Search */}
@@ -126,6 +170,14 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                 
                 <div className="flex items-center gap-1">
                     <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-xs border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white"
+                        onClick={() => handleOpenCreate(undefined)}
+                    >
+                        <Plus size={12} className="mr-1" /> Code
+                    </Button>
+                    <Button 
                          variant="ghost" 
                          size="icon" 
                          className="h-7 w-7 text-zinc-400 hover:text-white"
@@ -151,7 +203,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
         >
             {viewMode === 'tree' ? (
                 <div className="space-y-1 min-h-[300px] relative">
-                    {rootCodes.length === 0 && <div className="text-zinc-600 text-xs text-center py-4">No codes defined. Drop here to create root items.</div>}
+                    {rootCodes.length === 0 && <div className="text-zinc-600 text-xs text-center py-4">No codes defined. Create one to begin.</div>}
                     {rootCodes.map(code => (
                         <TreeItem 
                             key={code.id}
@@ -165,7 +217,8 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                             onUpdateCode={onUpdateCode}
                             onCodeDrop={onCodeDrop}
                             onDeleteCode={onDeleteCode}
-                            onCreateCode={onCreateCode}
+                            onEditCode={handleOpenEdit}
+                            onCreateChild={(parentId) => handleOpenCreate(parentId)}
                         />
                     ))}
                     <div className="pt-2 mt-2 border-t border-zinc-800/50">
@@ -173,12 +226,9 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                             variant="ghost" 
                             size="sm" 
                             className="w-full justify-start text-xs text-zinc-500 hover:text-zinc-300"
-                            onClick={() => {
-                                const name = prompt("New Category Name:");
-                                if(name) onCreateCode(name, 'category');
-                            }}
+                            onClick={() => handleOpenCreate(undefined)}
                         >
-                            <Plus size={12} className="mr-2"/> New Root Category
+                            <Plus size={12} className="mr-2"/> New Root Item
                         </Button>
                     </div>
                 </div>
@@ -189,7 +239,8 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                     searchTerm={searchTerm}
                     onUpdateCode={onUpdateCode}
                     onDeleteCode={onDeleteCode}
-                    onCreateCode={onCreateCode}
+                    onEditCode={handleOpenEdit}
+                    onCreateCode={() => handleOpenCreate(undefined)}
                 />
             )}
         </div>
@@ -208,12 +259,13 @@ interface TreeItemProps {
     onUpdateCode: (id: string, updates: Partial<Code>) => void;
     onCodeDrop: (sourceId: string, targetId: string) => void;
     onDeleteCode: (id: string) => void;
-    onCreateCode: (name: string, kind?: 'code' | 'category', parentId?: string) => Promise<Code>;
+    onEditCode: (code: Code) => void;
+    onCreateChild: (parentId: string) => void;
 }
 
 const TreeItem: React.FC<TreeItemProps> = ({ 
     code, allCodes, codings, depth, searchTerm, selectedCodeId, 
-    onNodeClick, onUpdateCode, onCodeDrop, onDeleteCode, onCreateCode 
+    onNodeClick, onUpdateCode, onCodeDrop, onDeleteCode, onEditCode, onCreateChild
 }) => {
     const children = allCodes.filter(c => c.parentId === code.id);
     const [isOpen, setIsOpen] = useState(true);
@@ -299,6 +351,12 @@ const TreeItem: React.FC<TreeItemProps> = ({
                     {code.name}
                 </span>
 
+                {code.description && (
+                    <span title={code.description} className="text-zinc-600 mr-1">
+                        <BookType size={10} />
+                    </span>
+                )}
+
                 <span className={cn("text-[10px] text-zinc-600 font-mono w-6 text-right", isDragOver && "opacity-0")}>
                     {usageCount}
                 </span>
@@ -313,30 +371,16 @@ const TreeItem: React.FC<TreeItemProps> = ({
                              <MoreHorizontal size={12} className="text-zinc-400" />
                          </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-300 w-48 z-50">
+                    <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800 text-zinc-300 w-48 z-50">
                         <DropdownMenuLabel className="text-xs uppercase text-zinc-500">{code.name}</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => {
-                            const newName = prompt("Rename code:", code.name);
-                            if(newName) onUpdateCode(code.id, { name: newName });
-                        }}>
-                            <Edit2 size={12} className="mr-2"/> Rename
-                        </DropdownMenuItem>
                         
-                        <DropdownMenuItem onClick={() => {
-                            const newColor = prompt("New Color Hex:", code.color);
-                            if(newColor) onUpdateCode(code.id, { color: newColor });
-                        }}>
-                             <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: code.color }} /> Change Color
+                        <DropdownMenuItem onClick={() => onEditCode(code)}>
+                            <Edit2 size={12} className="mr-2"/> Edit Code
                         </DropdownMenuItem>
 
-                        {isCategory && (
-                             <DropdownMenuItem onClick={() => {
-                                 const name = prompt("New Sub-code Name:");
-                                 if(name) onCreateCode(name, 'code', code.id);
-                             }}>
-                                 <Plus size={12} className="mr-2"/> Add Child Code
-                             </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem onClick={() => onCreateChild(code.id)}>
+                             <Plus size={12} className="mr-2"/> Add Child Code
+                        </DropdownMenuItem>
                         
                         <DropdownMenuSeparator className="bg-zinc-800" />
                         
@@ -360,7 +404,8 @@ const TreeItem: React.FC<TreeItemProps> = ({
                     onUpdateCode={onUpdateCode}
                     onCodeDrop={onCodeDrop}
                     onDeleteCode={onDeleteCode}
-                    onCreateCode={onCreateCode}
+                    onEditCode={onEditCode}
+                    onCreateChild={onCreateChild}
                 />
             ))}
         </div>
@@ -373,10 +418,11 @@ interface TableProps {
     searchTerm: string;
     onUpdateCode: (id: string, updates: Partial<Code>) => void;
     onDeleteCode: (id: string) => void;
-    onCreateCode: (name: string) => void;
+    onEditCode: (code: Code) => void;
+    onCreateCode: () => void;
 }
 
-const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpdateCode, onDeleteCode, onCreateCode }) => {
+const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpdateCode, onDeleteCode, onEditCode, onCreateCode }) => {
     
     // Sort logic
     const filteredCodes = codes.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -397,11 +443,13 @@ const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpd
                         {/* Name & Color */}
                         <div className="col-span-4 flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
-                            <Input 
-                                className="h-6 bg-transparent border-none p-0 text-xs text-zinc-300 focus-visible:ring-0" 
-                                value={code.name}
-                                onChange={(e) => onUpdateCode(code.id, { name: e.target.value })}
-                            />
+                            <span 
+                                className="text-zinc-300 font-medium cursor-pointer hover:underline truncate flex-1"
+                                onClick={() => onEditCode(code)}
+                            >
+                                {code.name}
+                            </span>
+                            {code.description && <BookType size={10} className="text-zinc-600 shrink-0" />}
                         </div>
 
                         {/* Kind Toggle */}
@@ -439,6 +487,9 @@ const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpd
                         {/* Usage & Delete */}
                         <div className="col-span-2 flex items-center justify-end gap-2">
                             <span className="font-mono text-zinc-500">{codings.filter(c => c.codeId === code.id).length}</span>
+                            <Button size="icon" variant="ghost" className="h-5 w-5 text-zinc-600 hover:text-white" onClick={() => onEditCode(code)}>
+                                <Edit2 size={12} />
+                            </Button>
                             <Button size="icon" variant="ghost" className="h-5 w-5 text-zinc-600 hover:text-red-500" onClick={() => onDeleteCode(code.id)}>
                                 <Trash2 size={12} />
                             </Button>
@@ -451,10 +502,7 @@ const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpd
                     variant="secondary" 
                     size="sm" 
                     className="w-full text-xs"
-                    onClick={() => {
-                         const name = prompt("New Code Name:");
-                         if(name) onCreateCode(name);
-                    }}
+                    onClick={onCreateCode}
                 >
                      <Plus size={12} className="mr-2" /> Add New Row
                  </Button>
