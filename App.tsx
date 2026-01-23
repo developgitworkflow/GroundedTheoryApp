@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { LayerControl } from './components/LayerControl';
 import { ArtifactView } from './components/ArtifactView';
@@ -656,6 +655,7 @@ export default function App() {
                             }
                         }}
                         onCreateCode={(name, kind) => handleCreateCode(name, kind)}
+                        onUpdateCode={handleUpdateCode}
                         theoryArtefact={theoryArtefact}
                         settings={projectSettings}
                         onOpenSettings={() => setIsSettingsOpen(true)}

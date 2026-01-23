@@ -35,7 +35,7 @@ import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 import { TheoryDashboard } from './TheoryDashboard';
 import { FrameworkDiagram } from './FrameworkDiagram';
-import { StackEditEditor } from './StackEditEditor'; // Updated Import
+import { StackEditEditor } from './StackEditEditor';
 
 interface TheoryBuilderProps {
   codes: Code[];
@@ -49,12 +49,11 @@ interface TheoryBuilderProps {
   onUpdateMemo: (id: string, updates: Partial<Memo>) => void;
   onDeleteMemo?: (id: string) => void;
   onCreateCode: (name: string, kind: 'code' | 'category') => void;
+  onUpdateCode: (id: string, updates: Partial<Code>) => void;
   theoryArtefact: Theory; 
   settings?: ProjectSettings; 
   onOpenSettings?: () => void; 
 }
-
-// ... (rest of the file logic remains similar, updated render below)
 
 export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({ 
     codes, 
@@ -68,6 +67,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     onUpdateMemo,
     onDeleteMemo,
     onCreateCode,
+    onUpdateCode,
     theoryArtefact,
     settings,
     onOpenSettings
@@ -88,13 +88,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   const [editingFindingId, setEditingFindingId] = useState<string | null>(null);
   const [editingFindingCategoryIds, setEditingFindingCategoryIds] = useState<string[]>([]);
 
-  // Local state for theory content editing before save/sync (if we were doing autosave, but we are just displaying here)
-  // For simplicity, we assume theoryArtefact is updated via parent logic or we need a handler for it.
-  // The current props `onAddMemo` implies theory chunks are memos, but `theoryArtefact` is passed.
-  // In a real app we'd have onUpdateTheory. I'll mock it via onAddMemo for now or just visual.
-  // * Correction: To make the editor functional for the theory narrative, I need to assume an update function or just local state for demo.
-  // I will assume `theoryArtefact` content updates are desired.
-  
+  // Local state for theory content editing
   const [narrativeContent, setNarrativeContent] = useState(theoryArtefact.content);
 
   const coreCode = codes.find(c => c.id === selectedCoreId);
@@ -148,7 +142,6 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     
     const generated = await generateTheoreticalMemo([coreCode.name], context);
     if (generated) {
-        // onAddMemo(`Story Line: ${coreCode.name}`, generated);
         setNarrativeContent(prev => prev + '\n\n' + generated);
     }
     setIsGenerating(false);
@@ -255,8 +248,6 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
             {/* VIEW: FINDINGS MANAGER */}
             {activeView === 'findings' && (
                 <div className="h-full w-full animate-in fade-in duration-300 p-8 overflow-y-auto flex flex-col">
-                    {/* ... Existing Findings UI (abbreviated for brevity as requested changes focused on Editor) ... */}
-                    {/* (This part is unchanged from original file, just ensuring context is kept) */}
                     <div className="max-w-5xl mx-auto space-y-6 w-full flex-1 flex flex-col">
                         <div className="flex justify-between items-center shrink-0">
                             <div>
@@ -315,7 +306,6 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                                 onChange={(e) => setNewFindingTitle(e.target.value)}
                                                 className="bg-zinc-900 border-zinc-700"
                                             />
-                                            {/* StackEdit Light Usage here too? Maybe overkill, stick to textarea for simple findings */}
                                             <StackEditEditor
                                                 value={newFindingContent}
                                                 onChange={setNewFindingContent}
@@ -446,10 +436,8 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                 </div>
                             </div>
                         ) : (
-                            // BOARD VIEW (Unchanged structure, just ensuring it renders)
                             <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
                                 <div className="flex gap-4 h-full min-w-max">
-                                    {/* Unmapped Column */}
                                     <div className="w-72 flex flex-col bg-zinc-900/20 rounded-lg border border-zinc-800/50">
                                         <div className="p-3 border-b border-zinc-800 bg-zinc-900/50 rounded-t-lg">
                                             <h3 className="font-semibold text-zinc-400 text-sm flex items-center gap-2">
@@ -463,7 +451,6 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                         </div>
                                     </div>
 
-                                    {/* RQ Columns */}
                                     {researchQuestions.map((rq, idx) => (
                                         <div 
                                             key={rq.id} 
@@ -541,7 +528,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                         </div>
                     </div>
 
-                    {/* MIDDLE PANE: The Narrative - UPDATED WITH EDITOR */}
+                    {/* MIDDLE PANE: The Narrative */}
                     <div className="flex-1 bg-zinc-900/30 flex flex-col min-w-0">
                         {/* Toolbar / Core Selector */}
                         <div className="p-4 border-b border-zinc-800 flex flex-col gap-4 bg-zinc-950/30">
@@ -590,18 +577,31 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                         </div>
                     </div>
 
-                    {/* RIGHT PANE: Context Inspector (Unchanged) */}
+                    {/* RIGHT PANE: Context Inspector - UPDATED FOR EDITING */}
                     <div className="w-80 bg-zinc-950 border-l border-zinc-800 flex flex-col">
                         {activeCategoryData ? (
                             <>
-                                <div className="p-4 border-b border-zinc-800 bg-zinc-900/10">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: activeCategoryData.category.color }} />
-                                        <h2 className="font-bold text-zinc-100">{activeCategoryData.category.name}</h2>
+                                <div className="p-4 border-b border-zinc-800 bg-zinc-900/10 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <div 
+                                            className="w-3 h-3 rounded-full shrink-0" 
+                                            style={{ backgroundColor: activeCategoryData.category.color }} 
+                                        />
+                                        <Input 
+                                            value={activeCategoryData.category.name}
+                                            onChange={(e) => onUpdateCode(activeCategoryData.category.id, { name: e.target.value })}
+                                            className="h-8 bg-transparent border-transparent hover:border-zinc-700 hover:bg-zinc-900 focus:bg-zinc-950 font-bold text-zinc-100 px-2 -ml-2"
+                                        />
                                     </div>
-                                    <p className="text-xs text-zinc-400 leading-snug">
-                                        {activeCategoryData.category.description || "No description provided."}
-                                    </p>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] uppercase font-bold text-zinc-500">Definition</label>
+                                        <textarea 
+                                            value={activeCategoryData.category.description || ''}
+                                            onChange={(e) => onUpdateCode(activeCategoryData.category.id, { description: e.target.value })}
+                                            className="w-full bg-zinc-900/30 border border-zinc-800 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-500/50 focus:bg-zinc-900 min-h-[80px] resize-none placeholder:text-zinc-600"
+                                            placeholder="Describe the properties and dimensions of this category..."
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
