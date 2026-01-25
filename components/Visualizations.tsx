@@ -1,18 +1,40 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import * as d3 from 'd3';
-import { Code, Coding, Artifact, ProjectSettings, Memo } from '../types';
+import { 
+  select, 
+  scaleBand, 
+  scaleLinear, 
+  max, 
+  min, 
+  axisBottom, 
+  axisLeft, 
+  pie, 
+  arc, 
+  hierarchy, 
+  treemap, 
+  linkHorizontal, 
+  scaleSequential, 
+  interpolateInferno, 
+  axisTop, 
+  chord, 
+  descending, 
+  rgb, 
+  ribbon, 
+  stack, 
+  stackOffsetSilhouette, 
+  area, 
+  curveBasis 
+} from 'd3';
+import { Code, Coding, Artifact, ProjectSettings, Memo, ResearchTeam } from '../types';
 import { 
     BarChart3, PieChart, Activity, Grid, FileText, Table as TableIcon, 
-    Waves, LayoutGrid, CircleDot, Calendar,
-    ZoomIn, ZoomOut, Filter, X, ArrowRight, MousePointer2, Eye, Maximize, Settings2, Sliders,
-    Layers, Network
+    Waves, LayoutGrid, CircleDot,
+    Network, Share2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { cn } from '../lib/utils';
-import { ScrollArea } from './ui/scroll-area';
+import { InternalOntologyMapper } from './InternalOntologyMapper';
 
 interface VisualizationsProps {
   codes: Code[];
@@ -20,12 +42,13 @@ interface VisualizationsProps {
   artifacts: Artifact[];
   settings: ProjectSettings;
   memos: Memo[];
+  team: ResearchTeam;
 }
 
-type ChartType = 'bar' | 'donut' | 'treemap' | 'cloud' | 'table' | 'sankey' | 'chord' | 'heatmap' | 'stream';
+type ChartType = 'bar' | 'donut' | 'treemap' | 'cloud' | 'table' | 'sankey' | 'chord' | 'heatmap' | 'stream' | 'ontology';
 
-export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, artifacts, settings, memos }) => {
-  const [activeChart, setActiveChart] = useState<ChartType>('bar');
+export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, artifacts, settings, memos, team }) => {
+  const [activeChart, setActiveChart] = useState<ChartType>('ontology');
 
   // --- Data Processing Helpers ---
 
@@ -68,7 +91,10 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
             <p className="text-xs text-zinc-500 mt-1">From Data to Viz</p>
         </div>
         
-        <div className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Categoric (Distribution)</div>
+        <div className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Theory & Structure</div>
+        <ChartNavButton active={activeChart === 'ontology'} onClick={() => setActiveChart('ontology')} icon={Share2} label="Ontology Graph" />
+
+        <div className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">Categoric (Distribution)</div>
         <ChartNavButton active={activeChart === 'bar'} onClick={() => setActiveChart('bar')} icon={BarChart3} label="Bar Chart" />
         <ChartNavButton active={activeChart === 'donut'} onClick={() => setActiveChart('donut')} icon={PieChart} label="Donut Chart" />
         <ChartNavButton active={activeChart === 'treemap'} onClick={() => setActiveChart('treemap')} icon={Grid} label="Treemap" />
@@ -100,6 +126,7 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
                     {activeChart === 'sankey' && 'Artifact-Code Flow'}
                     {activeChart === 'stream' && 'Coding Evolution Over Time'}
                     {activeChart === 'table' && 'Coding Statistics'}
+                    {activeChart === 'ontology' && 'Live Ontology Instance Graph'}
                 </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 p-0 overflow-hidden relative min-h-0">
@@ -112,6 +139,16 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
                 {activeChart === 'sankey' && <SankeyChart codes={codes} codings={codings} artifacts={artifacts} />}
                 {activeChart === 'stream' && <StreamChart codes={codes} codings={codings} artifacts={artifacts} />}
                 {activeChart === 'table' && <DataTable codes={codeStats} />}
+                {activeChart === 'ontology' && (
+                    <InternalOntologyMapper 
+                        settings={settings}
+                        artifacts={artifacts}
+                        codes={codes}
+                        codings={codings}
+                        memos={memos}
+                        team={team}
+                    />
+                )}
             </CardContent>
         </Card>
       </div>
@@ -134,16 +171,13 @@ const ChartNavButton = ({ active, onClick, icon: Icon, label }: any) => (
     </Button>
 );
 
-// ... (Existing BarChart, DonutChart, TreeMap, SankeyChart, WordCloud, DataTable components remain unchanged) ...
-// Re-implementing simplified versions for context validity in this snippet
-
 const BarChart = ({ data }: { data: (Code & { count: number })[] }) => {
     const ref = useRef<SVGSVGElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
 
         const { width, height } = wrapperRef.current.getBoundingClientRect();
@@ -151,8 +185,8 @@ const BarChart = ({ data }: { data: (Code & { count: number })[] }) => {
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;
 
-        const x = d3.scaleBand().range([0, innerWidth]).domain(data.map(d => d.name)).padding(0.2);
-        const y = d3.scaleLinear().domain([0, d3.max(data, d => d.count) || 10]).range([innerHeight, 0]);
+        const x = scaleBand().range([0, innerWidth]).domain(data.map(d => d.name)).padding(0.2);
+        const y = scaleLinear().domain([0, max(data, d => d.count) || 10]).range([innerHeight, 0]);
 
         const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -165,8 +199,8 @@ const BarChart = ({ data }: { data: (Code & { count: number })[] }) => {
             .attr("rx", 4);
 
         g.append("g").attr("transform", `translate(0,${innerHeight})`)
-            .call(d3.axisBottom(x)).selectAll("text").attr("transform", "translate(-10,0)rotate(-45)").style("text-anchor", "end").style("fill", "#9ca3af");
-        g.append("g").call(d3.axisLeft(y).ticks(5)).selectAll("text").style("fill", "#9ca3af");
+            .call(axisBottom(x)).selectAll("text").attr("transform", "translate(-10,0)rotate(-45)").style("text-anchor", "end").style("fill", "#9ca3af");
+        g.append("g").call(axisLeft(y).ticks(5)).selectAll("text").style("fill", "#9ca3af");
     }, [data]);
 
     return <div ref={wrapperRef} className="w-full h-full p-4"><svg ref={ref} width="100%" height="100%" /></div>;
@@ -178,16 +212,16 @@ const DonutChart = ({ data }: { data: (Code & { count: number })[] }) => {
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
         const { width, height } = wrapperRef.current.getBoundingClientRect();
         const radius = Math.min(width, height) / 2 - 40;
-        const pie = d3.pie<any>().value(d => d.count).sort(null);
-        const arc = d3.arc<any>().innerRadius(radius * 0.6).outerRadius(radius);
+        const pieGen = pie<any>().value(d => d.count).sort(null);
+        const arcGen = arc<any>().innerRadius(radius * 0.6).outerRadius(radius);
         const g = svg.append("g").attr("transform", `translate(${width / 2},${height / 2})`);
         
-        g.selectAll("path").data(pie(data.filter(d => d.count > 0))).enter().append("path")
-            .attr("d", arc).attr("fill", (d: any) => d.data.color).attr("stroke", "#18181b").attr("stroke-width", "2px");
+        g.selectAll("path").data(pieGen(data.filter(d => d.count > 0))).enter().append("path")
+            .attr("d", arcGen).attr("fill", (d: any) => d.data.color).attr("stroke", "#18181b").attr("stroke-width", "2px");
     }, [data]);
 
     return <div ref={wrapperRef} className="w-full h-full p-4"><svg ref={ref} width="100%" height="100%" /></div>;
@@ -199,12 +233,12 @@ const TreeMap = ({ data }: { data: (Code & { count: number })[] }) => {
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current || data.length === 0) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
         const { width, height } = wrapperRef.current.getBoundingClientRect();
         
-        const root = d3.hierarchy({ children: data.filter(d=>d.count>0) }).sum((d: any) => d.count);
-        d3.treemap().size([width, height]).padding(2)(root);
+        const root = hierarchy({ children: data.filter(d=>d.count>0) }).sum((d: any) => d.count);
+        treemap().size([width, height]).padding(2)(root);
 
         const nodes = svg.selectAll("g").data(root.leaves()).enter().append("g").attr("transform", d => `translate(${d.x0},${d.y0})`);
         nodes.append("rect").attr("width", d => d.x1 - d.x0).attr("height", d => d.y1 - d.y0).attr("fill", (d: any) => d.data.color).attr("rx", 4);
@@ -220,12 +254,11 @@ const SankeyChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
         const { width, height } = wrapperRef.current.getBoundingClientRect();
         
         // Simple bipartite manual sankey for demo
-        // ... (Reusing logic from previous turn for Sankey)
         const margin = { top: 40, right: 100, bottom: 40, left: 150 };
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;
@@ -241,7 +274,7 @@ const SankeyChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
             const code = codeNodes.find(co => co.id === c.codeId);
             if(art && code) {
                 g.append("path")
-                    .attr("d", d3.linkHorizontal()({ source: [art.x+10, art.y+10], target: [code.x, code.y+10] }))
+                    .attr("d", linkHorizontal()({ source: [art.x+10, art.y+10], target: [code.x, code.y+10] }))
                     .attr("fill", "none").attr("stroke", code.color).attr("stroke-opacity", 0.2).attr("stroke-width", 2);
             }
         });
@@ -299,7 +332,7 @@ const HeatmapChart = ({ codes, codings, artifacts }: { codes: Code[], codings: C
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
 
         const { width, height } = wrapperRef.current.getBoundingClientRect();
@@ -310,22 +343,22 @@ const HeatmapChart = ({ codes, codings, artifacts }: { codes: Code[], codings: C
         // Data Structure: matrix[codeIndex][artifactIndex] = count
         const activeCodes = codes.filter(c => codings.some(cd => cd.codeId === c.id));
         
-        const x = d3.scaleBand().range([0, innerWidth]).domain(artifacts.map(a => a.name)).padding(0.05);
-        const y = d3.scaleBand().range([0, innerHeight]).domain(activeCodes.map(c => c.name)).padding(0.05);
+        const x = scaleBand().range([0, innerWidth]).domain(artifacts.map(a => a.name)).padding(0.05);
+        const y = scaleBand().range([0, innerHeight]).domain(activeCodes.map(c => c.name)).padding(0.05);
 
-        const colorScale = d3.scaleSequential(d3.interpolateInferno).domain([0, 5]); // Cap at 5 for contrast
+        const colorScale = scaleSequential(interpolateInferno).domain([0, 5]); // Cap at 5 for contrast
 
         const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
         // X Labels
-        g.append("g").call(d3.axisTop(x)).selectAll("text")
+        g.append("g").call(axisTop(x)).selectAll("text")
             .attr("transform", "translate(0,-5)rotate(-45)")
             .style("text-anchor", "start")
             .style("fill", "#a1a1aa")
             .style("font-size", "10px");
 
         // Y Labels
-        g.append("g").call(d3.axisLeft(y)).selectAll("text")
+        g.append("g").call(axisLeft(y)).selectAll("text")
             .style("fill", "#a1a1aa")
             .style("font-size", "10px");
 
@@ -365,7 +398,7 @@ const ChordChart = ({ codes, codings }: { codes: Code[], codings: Coding[] }) =>
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
 
         const { width, height } = wrapperRef.current.getBoundingClientRect();
@@ -399,11 +432,11 @@ const ChordChart = ({ codes, codings }: { codes: Code[], codings: Coding[] }) =>
         });
 
         // 2. D3 Chord
-        const chord = d3.chord()
+        const chordGen = chord()
             .padAngle(0.05)
-            .sortSubgroups(d3.descending);
+            .sortSubgroups(descending);
 
-        const chords = chord(matrix);
+        const chords = chordGen(matrix);
 
         const g = svg.append("g")
             .attr("transform", `translate(${width / 2},${height / 2})`);
@@ -416,8 +449,8 @@ const ChordChart = ({ codes, codings }: { codes: Code[], codings: Coding[] }) =>
 
         group.append("path")
             .attr("fill", d => activeCodes[d.index].color)
-            .attr("stroke", d => d3.rgb(activeCodes[d.index].color).darker() as any)
-            .attr("d", d3.arc().innerRadius(innerRadius).outerRadius(outerRadius) as any);
+            .attr("stroke", d => rgb(activeCodes[d.index].color).darker() as any)
+            .attr("d", arc().innerRadius(innerRadius).outerRadius(outerRadius) as any);
 
         // Labels
         group.append("text")
@@ -439,9 +472,9 @@ const ChordChart = ({ codes, codings }: { codes: Code[], codings: Coding[] }) =>
             .selectAll("path")
             .data(chords)
             .join("path")
-            .attr("d", d3.ribbon().radius(innerRadius) as any)
+            .attr("d", ribbon().radius(innerRadius) as any)
             .attr("fill", d => activeCodes[d.source.index].color)
-            .attr("stroke", d => d3.rgb(activeCodes[d.source.index].color).darker() as any);
+            .attr("stroke", d => rgb(activeCodes[d.source.index].color).darker() as any);
 
     }, [codes, codings]);
 
@@ -454,7 +487,7 @@ const StreamChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
-        const svg = d3.select(ref.current);
+        const svg = select(ref.current);
         svg.selectAll("*").remove();
 
         const { width, height } = wrapperRef.current.getBoundingClientRect();
@@ -484,27 +517,27 @@ const StreamChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
         const keys = topCodes.map(c => c.id);
 
         // Stack
-        const series = d3.stack()
+        const series = stack()
             .keys(keys)
-            .offset(d3.stackOffsetSilhouette) // Streamgraph style
+            .offset(stackOffsetSilhouette) // Streamgraph style
             (data);
 
-        const x = d3.scaleLinear()
+        const x = scaleLinear()
             .domain([0, data.length - 1])
             .range([0, innerWidth]);
 
-        const yScaleMax = d3.max(series, s => d3.max(s, d => d[1])) || 10;
-        const yScaleMin = d3.min(series, s => d3.min(s, d => d[0])) || -10;
+        const yScaleMax = max(series, s => max(s, d => d[1])) || 10;
+        const yScaleMin = min(series, s => min(s, d => d[0])) || -10;
         
-        const y = d3.scaleLinear()
+        const y = scaleLinear()
             .domain([yScaleMin, yScaleMax])
             .range([innerHeight, 0]);
 
-        const area = d3.area<any>()
+        const areaGen = area<any>()
             .x((d, i) => x(i))
             .y0(d => y(d[0]))
             .y1(d => y(d[1]))
-            .curve(d3.curveBasis); // Smooth
+            .curve(curveBasis); // Smooth
 
         const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -512,7 +545,7 @@ const StreamChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
             .data(series)
             .join("path")
             .attr("fill", d => topCodes.find(c => c.id === d.key)?.color || "#888")
-            .attr("d", area)
+            .attr("d", areaGen)
             .attr("fill-opacity", 0.9)
             .append("title")
             .text(d => topCodes.find(c => c.id === d.key)?.name || "");
@@ -520,7 +553,7 @@ const StreamChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
         // Labels (Time)
         g.append("g")
             .attr("transform", `translate(0,${innerHeight})`)
-            .call(d3.axisBottom(x).ticks(data.length).tickFormat((d, i) => i + 1 + ""));
+            .call(axisBottom(x).ticks(data.length).tickFormat((d, i) => i + 1 + ""));
 
         // Legend overlay handled via tooltip mostly for streamgraphs
 

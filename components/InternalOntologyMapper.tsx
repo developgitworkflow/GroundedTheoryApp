@@ -1,11 +1,21 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import * as d3 from 'd3';
+import { 
+  select, 
+  forceSimulation, 
+  forceLink, 
+  forceManyBody, 
+  forceCollide, 
+  forceCenter, 
+  drag as d3Drag, 
+  SimulationNodeDatum, 
+  SimulationLinkDatum 
+} from 'd3';
 import { ProjectSettings, Artifact, Code, Memo, ResearchTeam, Coding } from '../types';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
-import { Network, Database, ChevronRight, X } from 'lucide-react';
+import { Database, X, Info } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface InternalOntologyMapperProps {
@@ -17,22 +27,20 @@ interface InternalOntologyMapperProps {
   team: ResearchTeam;
 }
 
-// --- Ontology Definitions ---
-
 type DomainType = 'formulation' | 'collection' | 'analysis' | 'finding';
 
-interface OntologyNode {
+interface OntologyNode extends SimulationNodeDatum {
   id: string;
   label: string;
   domain: DomainType;
   description: string;
-  count: number; // The live instance count
-  instances: any[]; // The actual data
+  count: number;
+  instances: any[];
 }
 
-interface OntologyLink {
-  source: string;
-  target: string;
+interface OntologyLink extends SimulationLinkDatum<OntologyNode> {
+  source: string | OntologyNode;
+  target: string | OntologyNode;
   label: string;
 }
 
@@ -48,107 +56,96 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<OntologyNode | null>(null);
 
-  // --- 1. Map Real Data to Abstract Ontology ---
-  const dataMap = useMemo(() => {
-    // Formulation
+  // --- Data Mapping ---
+  const graphData = useMemo(() => {
     const researchers = team.researchers;
     const questions = settings.theoreticalFramework.researchQuestions;
-    const field = settings.fieldOfStudy.subjectOfStudy ? [settings.fieldOfStudy] : [];
-    
-    // Collection
     const methods = settings.theoreticalFramework.methods;
-    const tools = settings.theoreticalFramework.tools;
     const participants = settings.participants;
-    const biblio = settings.theoreticalFramework.bibliographyContent ? [{ id: 'bib', name: 'Bibliography' }] : [];
-    const records = artifacts; // The raw data
-
-    // Analysis
+    
+    // Split Codes
     const openCodes = codes.filter(c => c.kind === 'code');
-    const categories = codes.filter(c => c.kind === 'category');
-    const interpretations = memos.filter(m => m.type === 'observational');
-    const consensusRules = team.consensusCriteria;
-
-    // Findings
+    const descCategories = codes.filter(c => c.kind === 'category' && !c.isCore);
+    const analyticCategories = codes.filter(c => c.kind === 'category' && c.isCore);
+    
+    const interpretations = memos.filter(m => m.type === 'observational' || m.type === 'analytical');
     const findings = memos.filter(m => m.type === 'finding');
-    const theory = [{ id: 'theory-core', name: `${settings.theoryType} Theory`, content: 'Core synthesis' }];
-    const report = settings.structuredAbstract.background ? [{ id: 'report', name: 'Structured Abstract' }] : [];
+    const report = settings.structuredAbstract.background ? [{ id: 'rep', name: 'Final Report' }] : [];
 
-    return {
-        researchers, questions, field, methods, tools, participants, biblio, records,
-        openCodes, categories, interpretations, consensusRules, findings, theory, report
-    };
-  }, [settings, artifacts, codes, memos, team]);
-
-  // --- 2. Construct Graph Data ---
-  const graphData = useMemo(() => {
     const nodes: OntologyNode[] = [
-      // Project Formulation (Blue)
-      { id: 'Project', label: 'Research Project', domain: 'formulation', description: 'The overarching inquiry context.', count: 1, instances: [{ name: settings.projectName }] },
-      { id: 'Researcher', label: 'Researcher', domain: 'formulation', description: 'Agents conducting the inquiry.', count: dataMap.researchers.length, instances: dataMap.researchers },
-      { id: 'Question', label: 'Research Question', domain: 'formulation', description: 'Specific queries guiding the study.', count: dataMap.questions.length, instances: dataMap.questions.map(q => ({ name: q.content })) },
-      { id: 'Field', label: 'Field of Study', domain: 'formulation', description: 'The environment and subject.', count: dataMap.field.length, instances: dataMap.field.map(f => ({ name: `${f.subjectOfStudy} in ${f.location}` })) },
-      
-      // Data Collection (Purple)
-      { id: 'Method', label: 'Method', domain: 'collection', description: 'Protocols for data gathering.', count: dataMap.methods.length, instances: dataMap.methods.map(m => ({ name: `${m.type} Protocol` })) },
-      { id: 'Subject', label: 'Subject/Actor', domain: 'collection', description: 'Participants or observed entities.', count: dataMap.participants.length, instances: dataMap.participants.map(p => ({ name: p.anonymizedCode })) },
-      { id: 'Artifact', label: 'Record/Artifact', domain: 'collection', description: 'Raw data files (transcripts, etc).', count: dataMap.records.length, instances: dataMap.records },
-      { id: 'Biblio', label: 'Bibliography', domain: 'collection', description: 'Literature foundation.', count: dataMap.biblio.length, instances: dataMap.biblio },
+      // 1. Project Formulation (Blue)
+      { id: 'Project', label: 'Research Project', domain: 'formulation', description: 'The study context.', count: 1, instances: [{ name: settings.projectName }] },
+      { id: 'Objective', label: 'Research Objective', domain: 'formulation', description: 'Goals of the study.', count: 1, instances: [{ name: 'Primary Objective' }] },
+      { id: 'Researcher', label: 'Researcher', domain: 'formulation', description: 'Agents conducting inquiry.', count: researchers.length, instances: researchers },
+      { id: 'Framework', label: 'Theoretical Framework', domain: 'formulation', description: 'Guiding theory type.', count: 1, instances: [{ name: settings.theoryType }] },
+      { id: 'Method', label: 'Method', domain: 'formulation', description: 'Protocols applied.', count: methods.length, instances: methods.map(m => ({ name: m.type })) },
+      { id: 'Field', label: 'Field of Study', domain: 'formulation', description: 'Subject and location.', count: 1, instances: [{ name: settings.fieldOfStudy.location }] },
+      { id: 'Question', label: 'Research Question', domain: 'formulation', description: 'Specific queries.', count: questions.length, instances: questions.map(q => ({ name: q.content })) },
 
-      // Analysis (Amber)
-      { id: 'Interpret', label: 'Interpretation', domain: 'analysis', description: 'Memos and annotations on data.', count: dataMap.interpretations.length, instances: dataMap.interpretations.map(m => ({ name: m.title })) },
-      { id: 'Code', label: 'Open Code', domain: 'analysis', description: 'Discrete concepts tagged in text.', count: dataMap.openCodes.length, instances: dataMap.openCodes },
-      { id: 'Category', label: 'Category', domain: 'analysis', description: 'Higher-level conceptual groupings.', count: dataMap.categories.length, instances: dataMap.categories },
-      { id: 'Consensus', label: 'Consensus', domain: 'analysis', description: 'Rules for agreement and validity.', count: dataMap.consensusRules.length, instances: dataMap.consensusRules },
+      // 2. Data Collection (Purple)
+      { id: 'Bibliography', label: 'Bibliography', domain: 'collection', description: 'Literature sources.', count: settings.theoreticalFramework.bibliographyContent ? 1 : 0, instances: [] },
+      { id: 'Subject', label: 'Subject / Object', domain: 'collection', description: 'Participants (Actors).', count: participants.length, instances: participants.map(p => ({ name: p.anonymizedCode })) },
+      { id: 'Record', label: 'Record (Artifact)', domain: 'collection', description: 'Raw data (transcripts).', count: artifacts.length, instances: artifacts },
 
-      // Findings (Green)
-      { id: 'Finding', label: 'Finding', domain: 'finding', description: 'Emergent theoretical insights.', count: dataMap.findings.length, instances: dataMap.findings.map(f => ({ name: f.title })) },
-      { id: 'Theory', label: 'Grounded Theory', domain: 'finding', description: 'The synthesized core argument.', count: 1, instances: dataMap.theory },
-      { id: 'Report', label: 'Report', domain: 'finding', description: 'Final output and abstract.', count: dataMap.report.length, instances: dataMap.report },
+      // 3. Consensus (Yellow/Amber)
+      { id: 'Reflexivity', label: 'Reflexivity', domain: 'analysis', description: 'Self-correction & reformulation.', count: memos.filter(m => m.type === 'reflective').length, instances: [] },
+      { id: 'MethodApp', label: 'Method Application', domain: 'analysis', description: 'Method applied to Subject.', count: methods.length, instances: [] },
+      { id: 'Interpretation', label: 'Interpretation', domain: 'analysis', description: 'Codings and Memos.', count: codings.length + interpretations.length, instances: interpretations.map(m => ({ name: m.title })) },
+
+      // 4. Finding (Green)
+      { id: 'Code', label: 'Code', domain: 'finding', description: 'Open codes.', count: openCodes.length, instances: openCodes },
+      { id: 'DescCat', label: 'Descriptive Category', domain: 'finding', description: 'Initial groupings.', count: descCategories.length, instances: descCategories },
+      { id: 'AnalyticCat', label: 'Analytic Category', domain: 'finding', description: 'Theoretical constructs.', count: analyticCategories.length, instances: analyticCategories },
+      { id: 'Theory', label: 'Grounded Theory', domain: 'finding', description: 'Core phenomenon.', count: 1, instances: [{ name: `${settings.theoryType} Theory` }] },
+      { id: 'Report', label: 'Report', domain: 'finding', description: 'Final output.', count: report.length, instances: report },
     ];
 
     const links: OntologyLink[] = [
-      // Formulation Flow
+      // Blue Zone
+      { source: 'Project', target: 'Objective', label: 'hasObjective' },
+      { source: 'Project', target: 'Framework', label: 'hasFramework' },
       { source: 'Project', target: 'Researcher', label: 'hasResearcher' },
-      { source: 'Project', target: 'Question', label: 'poses' },
       { source: 'Researcher', target: 'Field', label: 'selects' },
       { source: 'Researcher', target: 'Method', label: 'applies' },
+      { source: 'Objective', target: 'Question', label: 'poses' },
       
-      // Collection Flow
-      { source: 'Method', target: 'Subject', label: 'engages' },
-      { source: 'Subject', target: 'Artifact', label: 'generates' },
-      { source: 'Project', target: 'Biblio', label: 'references' },
-      
-      // Analysis Flow
-      { source: 'Researcher', target: 'Interpret', label: 'authors' },
-      { source: 'Artifact', target: 'Interpret', label: 'isInterpreted' },
-      { source: 'Interpret', target: 'Code', label: 'abstractsTo' },
-      { source: 'Code', target: 'Category', label: 'groupsInto' },
-      { source: 'Consensus', target: 'Interpret', label: 'validates' },
-      
-      // Findings Flow
-      { source: 'Category', target: 'Theory', label: 'elaborates' },
-      { source: 'Theory', target: 'Finding', label: 'yields' },
-      { source: 'Finding', target: 'Report', label: 'isReported' },
-      { source: 'Question', target: 'Finding', label: 'answeredBy' },
+      // Connections to Purple
+      { source: 'Method', target: 'MethodApp', label: 'defines' },
+      { source: 'Field', target: 'Subject', label: 'contains' },
+      { source: 'MethodApp', target: 'Subject', label: 'appliedTo' },
+      { source: 'Subject', target: 'Record', label: 'generates' },
+      { source: 'Bibliography', target: 'Project', label: 'informs' },
+
+      // Connections to Yellow
+      { source: 'Record', target: 'Interpretation', label: 'isInterpreted' },
+      { source: 'Interpretation', target: 'MethodApp', label: 'basedOn' },
+      { source: 'Reflexivity', target: 'Project', label: 'reformulates' },
+
+      // Connections to Green
+      { source: 'Interpretation', target: 'Code', label: 'hasCodes' },
+      { source: 'Code', target: 'DescCat', label: 'elaborates' },
+      { source: 'DescCat', target: 'AnalyticCat', label: 'abstracts' },
+      { source: 'AnalyticCat', target: 'Theory', label: 'synthesizes' },
+      { source: 'Theory', target: 'Report', label: 'isReported' },
+      { source: 'Report', target: 'Reflexivity', label: 'triggers' }, // Feedback loop
     ];
 
     return { nodes, links };
-  }, [dataMap, settings.projectName]);
+  }, [settings, artifacts, codes, memos, team, codings]);
 
-  // --- 3. D3 Rendering ---
+  // --- D3 Logic ---
   useEffect(() => {
     if (!svgRef.current || !wrapperRef.current) return;
 
     const { width, height } = wrapperRef.current.getBoundingClientRect();
-    const svg = d3.select(svgRef.current);
+    const svg = select(svgRef.current);
     svg.selectAll("*").remove();
 
-    // Definitions (Arrows)
     const defs = svg.append("defs");
     defs.append("marker")
-        .attr("id", "arrowhead")
+        .attr("id", "arrow-head")
         .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 28) // Offset to not overlap node
+        .attr("refX", 32)
         .attr("refY", 0)
         .attr("markerWidth", 6)
         .attr("markerHeight", 6)
@@ -157,42 +154,37 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
         .attr("d", "M0,-5L10,0L0,5")
         .attr("fill", "#52525b");
 
-    // Simulation
-    const simulation = d3.forceSimulation(graphData.nodes as any)
-        .force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(120))
-        .force("charge", d3.forceManyBody().strength(-500))
-        .force("center", d3.forceCenter(width / 2, height / 2))
-        .force("collide", d3.forceCollide().radius(50));
+    const simulation = forceSimulation(graphData.nodes)
+        .force("link", forceLink(graphData.links).id((d: any) => d.id).distance(100))
+        .force("charge", forceManyBody().strength(-300))
+        .force("collide", forceCollide().radius(40))
+        .force("center", forceCenter(width / 2, height / 2));
 
     const linkGroup = svg.append("g");
     const nodeGroup = svg.append("g");
 
-    // Draw Links
+    // Links
     const link = linkGroup.selectAll(".link")
         .data(graphData.links)
-        .enter().append("g")
-        .attr("class", "link");
-
-    const path = link.append("path")
+        .enter().append("path")
         .attr("stroke", "#3f3f46")
-        .attr("stroke-width", 1.5)
+        .attr("stroke-width", 1)
         .attr("fill", "none")
-        .attr("marker-end", "url(#arrowhead)");
+        .attr("marker-end", "url(#arrow-head)");
 
-    const linkLabel = link.append("text")
+    const linkLabel = linkGroup.selectAll(".link-label")
+        .data(graphData.links)
+        .enter().append("text")
         .text(d => d.label)
         .attr("font-size", 8)
         .attr("fill", "#71717a")
-        .attr("text-anchor", "middle")
-        .attr("dy", -3);
+        .attr("text-anchor", "middle");
 
-    // Draw Nodes
+    // Nodes
     const node = nodeGroup.selectAll(".node")
         .data(graphData.nodes)
         .enter().append("g")
-        .attr("class", "node")
-        .attr("cursor", "pointer")
-        .call(d3.drag<any, any>()
+        .call(d3Drag<any, any>()
             .on("start", (event, d) => {
                 if (!event.active) simulation.alphaTarget(0.3).restart();
                 d.fx = d.x;
@@ -208,32 +200,40 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
                 d.fy = null;
             })
         )
-        .on("click", (event, d) => {
-            setSelectedNode(d);
-        });
+        .on("click", (e, d) => setSelectedNode(d));
 
     // Node Circle
     node.append("circle")
-        .attr("r", 24)
+        .attr("r", 25)
         .attr("fill", d => {
             switch(d.domain) {
-                case 'formulation': return "#1e3a8a"; // Blue-900
-                case 'collection': return "#581c87"; // Purple-900
-                case 'analysis': return "#78350f"; // Amber-900
-                case 'finding': return "#064e3b"; // Emerald-900
+                case 'formulation': return "#1e3a8a"; // Blue
+                case 'collection': return "#581c87"; // Purple
+                case 'analysis': return "#78350f"; // Amber
+                case 'finding': return "#064e3b"; // Green
                 default: return "#27272a";
             }
         })
         .attr("stroke", d => {
             switch(d.domain) {
-                case 'formulation': return "#60a5fa"; // Blue-400
-                case 'collection': return "#c084fc"; // Purple-400
-                case 'analysis': return "#fbbf24"; // Amber-400
-                case 'finding': return "#34d399"; // Emerald-400
+                case 'formulation': return "#60a5fa"; 
+                case 'collection': return "#c084fc"; 
+                case 'analysis': return "#fbbf24"; 
+                case 'finding': return "#34d399"; 
                 default: return "#71717a";
             }
         })
         .attr("stroke-width", 2);
+
+    // Node Count
+    node.append("text")
+        .text(d => d.count)
+        .attr("dy", 5)
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .attr("font-size", 12)
+        .attr("font-weight", "bold")
+        .style("pointer-events", "none");
 
     // Node Label
     node.append("text")
@@ -242,41 +242,48 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
         .attr("text-anchor", "middle")
         .attr("fill", "#e4e4e7")
         .attr("font-size", 10)
-        .attr("font-weight", "bold");
+        .style("pointer-events", "none")
+        .call(wrap, 80); // Helper to wrap text if needed
 
-    // Node Count Badge (inside circle)
-    node.append("text")
-        .text(d => d.count)
-        .attr("dy", 5)
-        .attr("text-anchor", "middle")
-        .attr("fill", "white")
-        .attr("font-size", 14)
-        .attr("font-weight", "bold");
-
-    // Update positions
     simulation.on("tick", () => {
-        path.attr("d", (d: any) => {
-            const dx = d.target.x - d.source.x;
-            const dy = d.target.y - d.source.y;
-            const dr = Math.sqrt(dx * dx + dy * dy);
-            // Curved lines
-            return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+        link.attr("d", (d: any) => {
+            return `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`;
         });
 
-        linkLabel.attr("transform", (d: any) => {
-            // Very basic midpoint calculation for curved line label placement
-            const x = (d.source.x + d.target.x) / 2;
-            const y = (d.source.y + d.target.y) / 2;
-            return `translate(${x},${y})`;
-        });
+        linkLabel
+            .attr("x", (d: any) => (d.source.x + d.target.x) / 2)
+            .attr("y", (d: any) => (d.source.y + d.target.y) / 2);
 
         node.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
     });
 
-    return () => { simulation.stop(); };
+    function wrap(text: any, width: number) {
+        text.each(function(this: any) {
+            const text = select(this);
+            const words = text.text().split(/\s+/).reverse();
+            let word;
+            let line: any[] = [];
+            let lineNumber = 0;
+            const lineHeight = 1.1; 
+            const y = text.attr("y");
+            const dy = parseFloat(text.attr("dy"));
+            let tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
+            while (word = words.pop()) {
+                line.push(word);
+                tspan.text(line.join(" "));
+                if (tspan.node()!.getComputedTextLength() > width) {
+                    line.pop();
+                    tspan.text(line.join(" "));
+                    line = [word];
+                    tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+                }
+            }
+        });
+    }
+
   }, [graphData]);
 
-  // Helper colors
+  // Color Helper for UI
   const getDomainColor = (domain: DomainType) => {
       switch(domain) {
           case 'formulation': return "text-blue-400 border-blue-900/50 bg-blue-950/20";
@@ -288,66 +295,67 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
 
   return (
     <div className="flex h-full w-full bg-zinc-950 relative">
-        {/* Main Canvas */}
-        <div ref={wrapperRef} className="flex-1 h-full overflow-hidden relative">
-            <div className="absolute top-4 left-4 z-10 flex gap-4 pointer-events-none">
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-900 border border-blue-400"></div>
-                    <span className="text-xs text-zinc-400">Formulation</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-purple-900 border border-purple-400"></div>
-                    <span className="text-xs text-zinc-400">Data Collection</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-amber-900 border border-amber-400"></div>
-                    <span className="text-xs text-zinc-400">Analysis & Consensus</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-emerald-900 border border-emerald-400"></div>
-                    <span className="text-xs text-zinc-400">Findings</span>
+        <div ref={wrapperRef} className="flex-1 h-full relative overflow-hidden">
+            <svg ref={svgRef} width="100%" height="100%" className="cursor-grab active:cursor-grabbing" />
+            
+            {/* Legend */}
+            <div className="absolute top-4 left-4 p-3 bg-zinc-900/80 backdrop-blur border border-zinc-800 rounded-lg shadow-xl pointer-events-none">
+                <div className="text-[10px] font-bold uppercase text-zinc-500 mb-2">Ontology Domains</div>
+                <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                        <span className="text-xs text-zinc-300">Project Formulation</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                        <span className="text-xs text-zinc-300">Data Collection</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-xs text-zinc-300">Analysis & Consensus</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                        <span className="text-xs text-zinc-300">Finding</span>
+                    </div>
                 </div>
             </div>
-            
-            <svg ref={svgRef} width="100%" height="100%" className="cursor-grab active:cursor-grabbing" />
         </div>
 
-        {/* Inspector Panel */}
+        {/* Info Sidebar */}
         {selectedNode && (
-            <Card className={cn(
-                "w-80 h-full border-l rounded-none shadow-2xl absolute right-0 top-0 bottom-0 animate-in slide-in-from-right",
-                "bg-zinc-950 border-zinc-800"
-            )}>
-                <CardHeader className={cn("border-b border-zinc-800/50", getDomainColor(selectedNode.domain))}>
+            <Card className="w-80 h-full border-l rounded-none shadow-2xl absolute right-0 top-0 bottom-0 bg-zinc-950 border-zinc-800 animate-in slide-in-from-right">
+                <CardHeader className={cn("border-b", getDomainColor(selectedNode.domain))}>
                     <div className="flex justify-between items-start">
                         <div>
-                            <div className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-1">{selectedNode.domain} Domain</div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">{selectedNode.domain} Domain</div>
                             <CardTitle className="text-lg">{selectedNode.label}</CardTitle>
                         </div>
                         <button onClick={() => setSelectedNode(null)} className="hover:text-white transition-colors">
                             <X size={18} />
                         </button>
                     </div>
-                    <p className="text-xs opacity-70 mt-2">{selectedNode.description}</p>
+                    <p className="text-xs opacity-80 mt-2 italic">{selectedNode.description}</p>
                 </CardHeader>
                 <CardContent className="p-0 flex-1 overflow-hidden flex flex-col">
-                    <div className="p-4 bg-zinc-900/50 border-b border-zinc-800 flex justify-between items-center">
+                    <div className="p-3 bg-zinc-900/50 border-b border-zinc-800 flex justify-between items-center">
                         <span className="text-xs font-bold text-zinc-500 uppercase flex items-center gap-2">
                             <Database size={12} /> Instances
                         </span>
                         <Badge variant="secondary" className="font-mono">{selectedNode.count}</Badge>
                     </div>
                     
-                    <ScrollArea className="flex-1 p-4">
+                    <ScrollArea className="flex-1 p-3">
                         <div className="space-y-2">
                             {selectedNode.instances.length === 0 && (
-                                <div className="text-center py-8 text-zinc-600 text-xs italic">
+                                <div className="text-center py-8 text-zinc-600 text-xs italic flex flex-col items-center gap-2">
+                                    <Info size={24} className="opacity-20" />
                                     No data instantiated yet.
                                 </div>
                             )}
                             {selectedNode.instances.map((inst, idx) => (
                                 <div key={idx} className="p-3 bg-zinc-900 border border-zinc-800 rounded-md flex items-center gap-3">
-                                    <div className={cn("w-1.5 h-1.5 rounded-full", getDomainColor(selectedNode.domain).split(' ')[0].replace('text-', 'bg-'))}></div>
+                                    <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", getDomainColor(selectedNode.domain).split(' ')[0].replace('text-', 'bg-'))}></div>
                                     <span className="text-sm text-zinc-300 truncate font-medium">
                                         {inst.name || inst.title || inst.content || "Untitled"}
                                     </span>
