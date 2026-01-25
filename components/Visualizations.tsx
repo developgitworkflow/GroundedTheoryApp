@@ -1,19 +1,18 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as d3 from 'd3';
-import { Code, Coding, Artifact, ProjectSettings, Memo, ResearchTeam } from '../types';
+import { Code, Coding, Artifact, ProjectSettings, Memo } from '../types';
 import { 
     BarChart3, PieChart, Activity, Grid, FileText, Table as TableIcon, 
     Waves, LayoutGrid, CircleDot, Calendar,
     ZoomIn, ZoomOut, Filter, X, ArrowRight, MousePointer2, Eye, Maximize, Settings2, Sliders,
-    Layers, Network, Share2
+    Layers, Network
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { cn } from '../lib/utils';
 import { ScrollArea } from './ui/scroll-area';
-import { InternalOntologyMapper } from './InternalOntologyMapper';
 
 interface VisualizationsProps {
   codes: Code[];
@@ -21,12 +20,11 @@ interface VisualizationsProps {
   artifacts: Artifact[];
   settings: ProjectSettings;
   memos: Memo[];
-  team: ResearchTeam;
 }
 
-type ChartType = 'bar' | 'donut' | 'treemap' | 'cloud' | 'table' | 'sankey' | 'chord' | 'heatmap' | 'stream' | 'ontology';
+type ChartType = 'bar' | 'donut' | 'treemap' | 'cloud' | 'table' | 'sankey' | 'chord' | 'heatmap' | 'stream';
 
-export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, artifacts, settings, memos, team }) => {
+export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, artifacts, settings, memos }) => {
   const [activeChart, setActiveChart] = useState<ChartType>('bar');
 
   // --- Data Processing Helpers ---
@@ -77,7 +75,6 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
         <ChartNavButton active={activeChart === 'cloud'} onClick={() => setActiveChart('cloud')} icon={FileText} label="Word Cloud" />
 
         <div className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-2">Relational (Connections)</div>
-        <ChartNavButton active={activeChart === 'ontology'} onClick={() => setActiveChart('ontology')} icon={Share2} label="Ontology Graph" />
         <ChartNavButton active={activeChart === 'chord'} onClick={() => setActiveChart('chord')} icon={CircleDot} label="Chord Diagram" />
         <ChartNavButton active={activeChart === 'heatmap'} onClick={() => setActiveChart('heatmap')} icon={LayoutGrid} label="Matrix Heatmap" />
         <ChartNavButton active={activeChart === 'sankey'} onClick={() => setActiveChart('sankey')} icon={Network} label="Sankey Flow" />
@@ -103,7 +100,6 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
                     {activeChart === 'sankey' && 'Artifact-Code Flow'}
                     {activeChart === 'stream' && 'Coding Evolution Over Time'}
                     {activeChart === 'table' && 'Coding Statistics'}
-                    {activeChart === 'ontology' && 'Live Ontology Instance Graph'}
                 </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 p-0 overflow-hidden relative min-h-0">
@@ -116,16 +112,6 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
                 {activeChart === 'sankey' && <SankeyChart codes={codes} codings={codings} artifacts={artifacts} />}
                 {activeChart === 'stream' && <StreamChart codes={codes} codings={codings} artifacts={artifacts} />}
                 {activeChart === 'table' && <DataTable codes={codeStats} />}
-                {activeChart === 'ontology' && (
-                    <InternalOntologyMapper 
-                        settings={settings}
-                        artifacts={artifacts}
-                        codes={codes}
-                        codings={codings}
-                        memos={memos}
-                        team={team}
-                    />
-                )}
             </CardContent>
         </Card>
       </div>
@@ -147,6 +133,9 @@ const ChartNavButton = ({ active, onClick, icon: Icon, label }: any) => (
         <Icon size={14} className="mr-2" /> {label}
     </Button>
 );
+
+// ... (Existing BarChart, DonutChart, TreeMap, SankeyChart, WordCloud, DataTable components remain unchanged) ...
+// Re-implementing simplified versions for context validity in this snippet
 
 const BarChart = ({ data }: { data: (Code & { count: number })[] }) => {
     const ref = useRef<SVGSVGElement>(null);
@@ -236,6 +225,7 @@ const SankeyChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Co
         const { width, height } = wrapperRef.current.getBoundingClientRect();
         
         // Simple bipartite manual sankey for demo
+        // ... (Reusing logic from previous turn for Sankey)
         const margin = { top: 40, right: 100, bottom: 40, left: 150 };
         const innerWidth = width - margin.left - margin.right;
         const innerHeight = height - margin.top - margin.bottom;

@@ -5,7 +5,6 @@ import { downloadBibFile } from '../lib/bibUtils';
 import { exportProjectToOwl, parseOwlToProject } from '../lib/owlUtils';
 import { generateRoCrate } from '../lib/roCrateUtils';
 import { exportProjectToRefiQda, parseRefiQdaToProject } from '../lib/refiQdaUtils';
-import { DEMO_DATA } from '../lib/demoData';
 import { 
   Settings, 
   User, 
@@ -38,8 +37,7 @@ import {
   Archive,
   Package,
   HardDrive,
-  ArrowRightLeft,
-  Sparkles
+  ArrowRightLeft
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -90,13 +88,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   const handleSave = () => {
     onSave(localSettings, localTeam, localMemos);
     onClose();
-  };
-
-  const handleLoadDemo = () => {
-      if (confirm("This will overwrite your current project data with the Example Project. Are you sure you want to proceed?")) {
-          onImportProject(DEMO_DATA);
-          onClose();
-      }
   };
 
   const handleExportOwl = () => {
@@ -633,23 +624,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 {activeTab === 'data' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <SectionHeader title="Data Management" description="Backup, restore, and archive project data." />
-                        
-                        <div className="p-4 bg-gradient-to-br from-indigo-900/20 to-blue-900/10 border border-indigo-500/30 rounded-lg space-y-4 shadow-lg shadow-indigo-900/10">
-                            <div>
-                                <h4 className="text-sm font-bold text-zinc-100 flex items-center gap-2 mb-1">
-                                    <Sparkles size={16} className="text-indigo-400" />
-                                    Example Project
-                                </h4>
-                                <p className="text-xs text-zinc-400">
-                                    Load a fully populated Grounded Theory study ("Digital Nomadism & Place Attachment") to explore the application's capabilities. 
-                                    <span className="text-red-400 block mt-1">Warning: Overwrites current data.</span>
-                                </p>
-                            </div>
-                            <Button variant="brand" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2" onClick={handleLoadDemo}>
-                                <Database size={14}/> Load Example Dataset
-                            </Button>
-                        </div>
-
                         <div className="grid grid-cols-2 gap-4">
                             <div className="col-span-2 p-4 bg-zinc-900/30 border border-zinc-800 rounded-lg space-y-4">
                                 <div>
@@ -721,7 +695,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
                 )}
 
-                {/* ... other tabs remain unchanged (research_questions, participants, methodology, tools, bibliography, findings, abstract, team, theory, analysis, visuals) ... */}
                 {activeTab === 'research_questions' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
