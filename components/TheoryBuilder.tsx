@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact, ProjectSettings } from '../types';
 import { 
     Crown, 
@@ -27,18 +27,23 @@ import {
     Link as LinkIcon,
     GitBranch,
     ArrowLeftCircle,
-    CopyPlus
+    CopyPlus,
+    Microscope,
+    User,
+    HelpCircle,
+    FileQuestion
 } from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 import { TheoryDashboard } from './TheoryDashboard';
 import { FrameworkDiagram } from './FrameworkDiagram';
 import { StackEditEditor, StackEditEditorRef } from './StackEditEditor';
+import { MemoTypeBadge } from './MemoComponents';
 
 interface TheoryBuilderProps {
   codes: Code[];
@@ -83,6 +88,10 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [dirSearch, setDirSearch] = useState('');
   
+  // Right Pane State
+  const [rightPaneTab, setRightPaneTab] = useState('context');
+  const [memoSearch, setMemoSearch] = useState('');
+
   // Findings State
   const [findingsView, setFindingsView] = useState<'list' | 'board'>('list');
   const [isCreatingFinding, setIsCreatingFinding] = useState(false);
@@ -100,6 +109,13 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   const coreCode = codes.find(c => c.id === selectedCoreId);
   const categories = codes.filter(c => c.kind === 'category');
   const findingMemos = useMemo(() => memos.filter(m => m.type === 'finding'), [memos]);
+
+  // Auto-switch right pane when category is selected
+  useEffect(() => {
+      if (selectedCategoryId) {
+          setRightPaneTab('concept');
+      }
+  }, [selectedCategoryId]);
 
   // Directory Filtering
   const filteredCategories = useMemo(() => {
@@ -128,6 +144,15 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
 
       return { category, childCodes, relatedCodings, relatedMemos };
   }, [selectedCategoryId, codes, codings, memos]);
+
+  // Filtered Memos for Right Pane
+  const filteredSideMemos = useMemo(() => {
+      if (!memoSearch) return memos;
+      return memos.filter(m => 
+          m.title.toLowerCase().includes(memoSearch.toLowerCase()) || 
+          m.content.toLowerCase().includes(memoSearch.toLowerCase())
+      );
+  }, [memos, memoSearch]);
 
   const handleCoreChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newId = e.target.value;
@@ -206,11 +231,12 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
   };
 
   // Helper for narrative insertion
-  const insertReference = (text: string, type: 'quote' | 'link' | 'plain') => {
+  const insertReference = (text: string, type: 'quote' | 'link' | 'plain' | 'block') => {
       if (!editorRef.current) return;
       let content = text;
       if (type === 'quote') content = `\n> "${text.trim()}"\n`;
       if (type === 'link') content = `**${text.trim()}**`;
+      if (type === 'block') content = `\n\n### ${text.trim()}\n`;
       
       editorRef.current.insertText(content);
   };
@@ -491,7 +517,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
             {activeView === 'narrative' && (
                 <div className="flex h-full w-full animate-in fade-in duration-300">
                     
-                    {/* LEFT PANE: Concept Directory (Unchanged) */}
+                    {/* LEFT PANE: Concept Directory */}
                     <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col">
                         <div className="p-3 border-b border-zinc-800 bg-zinc-950 flex gap-2">
                             <div className="relative flex-1">
@@ -598,135 +624,259 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                         </div>
                     </div>
 
-                    {/* RIGHT PANE: Source Material Inspector */}
+                    {/* RIGHT PANE: Context & Resources */}
                     <div className="w-80 bg-zinc-950 border-l border-zinc-800 flex flex-col">
-                        {activeCategoryData ? (
-                            <>
-                                <div className="p-4 border-b border-zinc-800 bg-zinc-900/10 space-y-3">
-                                    <div className="flex items-center gap-2">
-                                        <div 
-                                            className="w-3 h-3 rounded-full shrink-0" 
-                                            style={{ backgroundColor: activeCategoryData.category.color }} 
-                                        />
-                                        <Input 
-                                            value={activeCategoryData.category.name}
-                                            onChange={(e) => onUpdateCode(activeCategoryData.category.id, { name: e.target.value })}
-                                            className="h-8 bg-transparent border-transparent hover:border-zinc-700 hover:bg-zinc-900 focus:bg-zinc-950 font-bold text-zinc-100 px-2 -ml-2"
-                                        />
+                        <Tabs value={rightPaneTab} onValueChange={setRightPaneTab} className="flex-1 flex flex-col">
+                            <div className="border-b border-zinc-800 pt-2 px-2 bg-zinc-950">
+                                <TabsList className="w-full bg-zinc-900 border border-zinc-800">
+                                    <TabsTrigger value="context" className="flex-1 text-xs">Context</TabsTrigger>
+                                    <TabsTrigger value="concept" disabled={!selectedCategoryId} className="flex-1 text-xs">Concept</TabsTrigger>
+                                    <TabsTrigger value="memos" className="flex-1 text-xs">Memos</TabsTrigger>
+                                </TabsList>
+                            </div>
+
+                            {/* TAB: GLOBAL CONTEXT */}
+                            <TabsContent value="context" className="flex-1 overflow-y-auto p-0 animate-in fade-in slide-in-from-right-2">
+                                <div className="p-4 space-y-6">
+                                    {/* RQs */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                                            <HelpCircle size={14} className="text-blue-500" />
+                                            <h3 className="text-xs font-bold uppercase tracking-widest">Research Questions</h3>
+                                        </div>
+                                        {researchQuestions.length === 0 && <span className="text-zinc-600 text-xs italic">No questions defined.</span>}
+                                        {researchQuestions.map((rq, idx) => (
+                                            <div key={rq.id} className="p-3 bg-zinc-900/30 border border-zinc-800 rounded group relative hover:border-zinc-700">
+                                                <div className="text-[10px] text-zinc-500 font-mono mb-1">RQ-{idx+1}</div>
+                                                <p className="text-xs text-zinc-300 italic">"{rq.content}"</p>
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-blue-400"
+                                                    onClick={() => insertReference(`**${rq.content}**`, 'block')}
+                                                    title="Insert RQ"
+                                                >
+                                                    <ArrowLeftCircle size={14} />
+                                                </Button>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="space-y-1 relative group">
-                                        <label className="text-[10px] uppercase font-bold text-zinc-500">Definition</label>
-                                        <textarea 
-                                            value={activeCategoryData.category.description || ''}
-                                            onChange={(e) => onUpdateCode(activeCategoryData.category.id, { description: e.target.value })}
-                                            className="w-full bg-zinc-900/30 border border-zinc-800 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-500/50 focus:bg-zinc-900 min-h-[80px] resize-none placeholder:text-zinc-600"
-                                            placeholder="Describe the properties and dimensions of this category..."
-                                        />
-                                        {activeCategoryData.category.description && (
-                                            <Button 
-                                                size="icon" 
-                                                variant="secondary" 
-                                                className="absolute bottom-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 hover:bg-blue-600 hover:text-white"
-                                                onClick={() => insertReference(activeCategoryData.category.description!, 'quote')}
-                                                title="Insert Definition"
-                                            >
-                                                <ArrowLeftCircle size={14} />
-                                            </Button>
-                                        )}
+
+                                    {/* Key Findings */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                                            <Lightbulb size={14} className="text-amber-500" />
+                                            <h3 className="text-xs font-bold uppercase tracking-widest">Key Findings</h3>
+                                        </div>
+                                        {findingMemos.length === 0 && <span className="text-zinc-600 text-xs italic">No findings recorded.</span>}
+                                        {findingMemos.map(finding => (
+                                            <div key={finding.id} className="p-3 bg-zinc-900/30 border border-zinc-800 rounded group relative hover:border-zinc-700">
+                                                <div className="font-bold text-xs text-zinc-200 mb-1">{finding.title}</div>
+                                                <p className="text-[10px] text-zinc-500 line-clamp-2">{finding.content}</p>
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-amber-400"
+                                                    onClick={() => insertReference(`**Finding: ${finding.title}**\n${finding.content}`, 'quote')}
+                                                    title="Insert Finding"
+                                                >
+                                                    <ArrowLeftCircle size={14} />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Methodology */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                                            <Microscope size={14} className="text-purple-500" />
+                                            <h3 className="text-xs font-bold uppercase tracking-widest">Methodology</h3>
+                                        </div>
+                                        {settings?.theoreticalFramework.methods.length === 0 && <span className="text-zinc-600 text-xs italic">No methods defined.</span>}
+                                        {settings?.theoreticalFramework.methods.map(m => (
+                                            <div key={m.id} className="p-3 bg-zinc-900/30 border border-zinc-800 rounded group relative hover:border-zinc-700">
+                                                <Badge variant="outline" className="text-[9px] mb-1 capitalize border-zinc-700 text-zinc-400">{m.type}</Badge>
+                                                <p className="text-[10px] text-zinc-500 font-mono line-clamp-3">{m.protocolContent}</p>
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-purple-400"
+                                                    onClick={() => insertReference(`*Method (${m.type}):* ${m.protocolContent}`, 'quote')}
+                                                    title="Insert Protocol"
+                                                >
+                                                    <ArrowLeftCircle size={14} />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Participants */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                                            <User size={14} className="text-blue-400" />
+                                            <h3 className="text-xs font-bold uppercase tracking-widest">Participants</h3>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {settings?.participants.length === 0 && <span className="text-zinc-600 text-xs italic">No participants.</span>}
+                                            {settings?.participants.map(p => (
+                                                <Badge 
+                                                    key={p.id} 
+                                                    variant="secondary" 
+                                                    className="bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800 cursor-pointer"
+                                                    onClick={() => insertReference(p.anonymizedCode, 'plain')}
+                                                >
+                                                    {p.anonymizedCode}
+                                                </Badge>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
+                            </TabsContent>
 
-                                <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                                    {/* Related Codes */}
-                                    <div>
-                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <Tag size={12}/> Child Codes
-                                        </h3>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {activeCategoryData.childCodes.length > 0 ? activeCategoryData.childCodes.map(c => (
-                                                <div key={c.id} className="group relative flex items-center">
-                                                    <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-normal pr-6">
-                                                        {c.name}
-                                                    </Badge>
-                                                    <button 
-                                                        className="absolute right-1 text-zinc-500 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => insertReference(c.name, 'link')}
-                                                        title="Insert Code Name"
-                                                    >
-                                                        <ArrowLeftCircle size={12} />
-                                                    </button>
-                                                </div>
-                                            )) : (
-                                                <span className="text-zinc-600 text-xs italic">No child codes.</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Evidence (Codings) */}
-                                    <div>
-                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <Quote size={12}/> Grounded Evidence
-                                        </h3>
-                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
-                                            {activeCategoryData.relatedCodings.length > 0 ? activeCategoryData.relatedCodings.map(coding => {
-                                                const sourceArtifact = artifacts.find(a => a.id === coding.artifactId);
-                                                return (
-                                                    <div key={coding.id} className="group p-2 bg-zinc-900/30 border border-zinc-800 rounded hover:bg-zinc-900 transition-colors relative">
-                                                        <p className="text-xs text-zinc-300 italic line-clamp-3 mb-1">"{coding.textSnippet}"</p>
-                                                        <div className="flex justify-between items-center text-[9px] text-zinc-600">
-                                                            <span>{sourceArtifact?.name || 'Unknown Source'}</span>
-                                                        </div>
-                                                        <Button 
-                                                            size="icon" 
-                                                            variant="ghost" 
-                                                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800"
-                                                            onClick={() => insertReference(`${coding.textSnippet} (${sourceArtifact?.name || 'Source'})`, 'quote')}
-                                                            title="Insert Quote"
-                                                        >
-                                                            <CopyPlus size={14} />
-                                                        </Button>
-                                                    </div>
-                                                );
-                                            }) : (
-                                                <span className="text-zinc-600 text-xs italic">No linked evidence found.</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Memos */}
-                                    <div>
-                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                            <StickyNote size={12}/> Related Memos ({activeCategoryData.relatedMemos.length})
-                                        </h3>
-                                        <div className="space-y-2">
-                                            {activeCategoryData.relatedMemos.length > 0 ? activeCategoryData.relatedMemos.slice(0, 5).map(m => (
-                                                <Card key={m.id} className="bg-zinc-900 border-zinc-800 p-3 group relative hover:border-zinc-700">
-                                                    <div className="font-semibold text-xs text-zinc-300 mb-1 pr-6">{m.title}</div>
-                                                    <div className="text-[10px] text-zinc-500 line-clamp-3">{m.content}</div>
+                            {/* TAB: SELECTED CONCEPT */}
+                            <TabsContent value="concept" className="flex-1 overflow-y-auto p-0 animate-in fade-in slide-in-from-right-2">
+                                {activeCategoryData ? (
+                                    <>
+                                        <div className="p-4 border-b border-zinc-800 bg-zinc-900/10 space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <div 
+                                                    className="w-3 h-3 rounded-full shrink-0" 
+                                                    style={{ backgroundColor: activeCategoryData.category.color }} 
+                                                />
+                                                <Input 
+                                                    value={activeCategoryData.category.name}
+                                                    onChange={(e) => onUpdateCode(activeCategoryData.category.id, { name: e.target.value })}
+                                                    className="h-8 bg-transparent border-transparent hover:border-zinc-700 hover:bg-zinc-900 focus:bg-zinc-950 font-bold text-zinc-100 px-2 -ml-2"
+                                                />
+                                            </div>
+                                            <div className="space-y-1 relative group">
+                                                <label className="text-[10px] uppercase font-bold text-zinc-500">Definition</label>
+                                                <textarea 
+                                                    value={activeCategoryData.category.description || ''}
+                                                    onChange={(e) => onUpdateCode(activeCategoryData.category.id, { description: e.target.value })}
+                                                    className="w-full bg-zinc-900/30 border border-zinc-800 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-500/50 focus:bg-zinc-900 min-h-[80px] resize-none placeholder:text-zinc-600"
+                                                    placeholder="Describe the properties and dimensions of this category..."
+                                                />
+                                                {activeCategoryData.category.description && (
                                                     <Button 
                                                         size="icon" 
-                                                        variant="ghost" 
-                                                        className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800"
-                                                        onClick={() => insertReference(`**Memo: ${m.title}**\n${m.content}`, 'plain')}
-                                                        title="Insert Memo"
+                                                        variant="secondary" 
+                                                        className="absolute bottom-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 hover:bg-blue-600 hover:text-white"
+                                                        onClick={() => insertReference(activeCategoryData.category.description!, 'quote')}
+                                                        title="Insert Definition"
                                                     >
                                                         <ArrowLeftCircle size={14} />
                                                     </Button>
-                                                </Card>
-                                            )) : (
-                                                <span className="text-zinc-600 text-xs italic">No linked memos.</span>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
+
+                                        <div className="p-4 space-y-6">
+                                            {/* Related Codes */}
+                                            <div>
+                                                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                    <Tag size={12}/> Child Codes
+                                                </h3>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {activeCategoryData.childCodes.length > 0 ? activeCategoryData.childCodes.map(c => (
+                                                        <div key={c.id} className="group relative flex items-center">
+                                                            <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-normal pr-6">
+                                                                {c.name}
+                                                            </Badge>
+                                                            <button 
+                                                                className="absolute right-1 text-zinc-500 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                onClick={() => insertReference(c.name, 'link')}
+                                                                title="Insert Code Name"
+                                                            >
+                                                                <ArrowLeftCircle size={12} />
+                                                            </button>
+                                                        </div>
+                                                    )) : (
+                                                        <span className="text-zinc-600 text-xs italic">No child codes.</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Evidence (Codings) */}
+                                            <div>
+                                                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                    <Quote size={12}/> Grounded Evidence
+                                                </h3>
+                                                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                                    {activeCategoryData.relatedCodings.length > 0 ? activeCategoryData.relatedCodings.map(coding => {
+                                                        const sourceArtifact = artifacts.find(a => a.id === coding.artifactId);
+                                                        return (
+                                                            <div key={coding.id} className="group p-2 bg-zinc-900/30 border border-zinc-800 rounded hover:bg-zinc-900 transition-colors relative">
+                                                                <p className="text-xs text-zinc-300 italic line-clamp-3 mb-1">"{coding.textSnippet}"</p>
+                                                                <div className="flex justify-between items-center text-[9px] text-zinc-600">
+                                                                    <span>{sourceArtifact?.name || 'Unknown Source'}</span>
+                                                                </div>
+                                                                <Button 
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800"
+                                                                    onClick={() => insertReference(`${coding.textSnippet} (${sourceArtifact?.name || 'Source'})`, 'quote')}
+                                                                    title="Insert Quote"
+                                                                >
+                                                                    <CopyPlus size={14} />
+                                                                </Button>
+                                                            </div>
+                                                        );
+                                                    }) : (
+                                                        <span className="text-zinc-600 text-xs italic">No linked evidence found.</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full text-zinc-600 p-8 text-center gap-2">
+                                        <Layout size={32} className="opacity-20" />
+                                        <p className="text-sm font-medium">No Concept Selected</p>
+                                        <p className="text-xs">Select a category from the directory on the left to view its details.</p>
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                            {/* TAB: MEMOS */}
+                            <TabsContent value="memos" className="flex-1 overflow-y-auto p-0 animate-in fade-in slide-in-from-right-2">
+                                <div className="p-4 space-y-4">
+                                    <div className="relative">
+                                        <Search className="absolute left-2 top-2.5 text-zinc-500" size={12} />
+                                        <Input 
+                                            className="pl-7 h-8 bg-zinc-900 border-zinc-800 text-xs" 
+                                            placeholder="Search all memos..." 
+                                            value={memoSearch}
+                                            onChange={(e) => setMemoSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        {filteredSideMemos.length === 0 && <span className="text-zinc-600 text-xs italic text-center block py-4">No memos found.</span>}
+                                        {filteredSideMemos.map(m => (
+                                            <Card key={m.id} className="bg-zinc-900 border-zinc-800 p-3 group relative hover:border-zinc-700 transition-all">
+                                                <div className="flex justify-between items-start mb-1.5">
+                                                    <MemoTypeBadge type={m.type} className="text-[9px] h-4" />
+                                                    <span className="text-[9px] text-zinc-600 font-mono">#{m.number}</span>
+                                                </div>
+                                                <div className="font-semibold text-xs text-zinc-300 mb-1 pr-6 truncate" title={m.title}>{m.title}</div>
+                                                <div className="text-[10px] text-zinc-500 line-clamp-3 leading-relaxed mb-1">{m.content}</div>
+                                                <div className="flex justify-end pt-1">
+                                                    <Button 
+                                                        size="xs" 
+                                                        variant="ghost" 
+                                                        className="h-5 px-2 text-[9px] text-zinc-500 hover:text-blue-400 gap-1"
+                                                        onClick={() => insertReference(`**Memo: ${m.title}**\n${m.content}`, 'plain')}
+                                                    >
+                                                        <ArrowLeftCircle size={10} /> Insert
+                                                    </Button>
+                                                </div>
+                                            </Card>
+                                        ))}
                                     </div>
                                 </div>
-                            </>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-zinc-600 p-8 text-center gap-2">
-                                <Layout size={32} className="opacity-20" />
-                                <p className="text-sm font-medium">Source Material</p>
-                                <p className="text-xs">Select a category from the directory to access definitions, memos, and raw evidence for your narrative.</p>
-                            </div>
-                        )}
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </div>
             )}
