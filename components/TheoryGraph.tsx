@@ -1,20 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { 
-  select, 
-  zoom as d3Zoom, 
-  zoomIdentity, 
-  forceSimulation, 
-  forceLink, 
-  forceManyBody, 
-  forceCollide, 
-  forceCenter, 
-  drag as d3Drag, 
-  rgb, 
-  SimulationNodeDatum, 
-  SimulationLinkDatum, 
-  ZoomBehavior 
-} from 'd3';
+import * as d3 from 'd3';
 import { Code, Coding, LayerType } from '../types';
 import { buildTheoryGraph, GraphNode, GraphLink } from '../lib/graphUtils';
 import { ZoomIn, ZoomOut, Maximize, RefreshCw, Layers, Focus } from 'lucide-react';
@@ -29,8 +15,8 @@ interface TheoryGraphProps {
 }
 
 // D3 Types
-interface D3Node extends GraphNode, SimulationNodeDatum {}
-interface D3Link extends SimulationLinkDatum<D3Node> {
+interface D3Node extends GraphNode, d3.SimulationNodeDatum {}
+interface D3Link extends d3.SimulationLinkDatum<D3Node> {
   type: GraphLink['type'];
   value: number;
 }
@@ -38,7 +24,7 @@ interface D3Link extends SimulationLinkDatum<D3Node> {
 export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layersVisible, onNodeClick, selectedCodeId }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -61,19 +47,19 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
 
   const handleZoomIn = () => {
       if (svgRef.current && zoomRef.current) {
-          select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 1.2);
+          d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 1.2);
       }
   };
 
   const handleZoomOut = () => {
       if (svgRef.current && zoomRef.current) {
-          select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 0.8);
+          d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 0.8);
       }
   };
 
   const handleResetZoom = () => {
       if (svgRef.current && zoomRef.current) {
-          select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, zoomIdentity);
+          d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
       }
   };
 
@@ -81,7 +67,7 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     if (!svgRef.current || !layersVisible[LayerType.AXIAL_CONNECTIONS]) return;
 
     const { width, height } = dimensions;
-    const svg = select(svgRef.current);
+    const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear canvas
 
     // --- Definitions (Gradients & Filters) ---
@@ -131,7 +117,7 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
         // Highlight
         gradient.append("stop")
             .attr("offset", "0%")
-            .attr("stop-color", rgb(node.color).brighter(1.5).toString());
+            .attr("stop-color", d3.rgb(node.color).brighter(1.5).toString());
         // Main color
         gradient.append("stop")
             .attr("offset", "100%")
@@ -141,7 +127,7 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     // 2. Zoom Setup
     const container = svg.append("g");
     
-    const zoom = d3Zoom<SVGSVGElement, unknown>()
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 4])
         .on("zoom", (event) => {
             container.attr("transform", event.transform);
@@ -152,8 +138,8 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
     svg.call(zoom).on("dblclick.zoom", null);
 
     // 3. Simulation Setup
-    const simulation = forceSimulation(nodes)
-      .force("link", forceLink(links)
+    const simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links)
           .id((d: any) => d.id)
           .distance((d: any) => {
               if (d.type === 'hierarchy') return 80;
@@ -162,17 +148,17 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
           })
           .strength((d: any) => d.type === 'hierarchy' ? 0.8 : 0.2)
       )
-      .force("charge", forceManyBody().strength((d: any) => {
+      .force("charge", d3.forceManyBody().strength((d: any) => {
           if (d.isCore) return -800;
           if (d.kind === 'category') return -400;
           return -100;
       }))
-      .force("collide", forceCollide().radius((d: any) => {
+      .force("collide", d3.forceCollide().radius((d: any) => {
           if (d.isCore) return 60;
           if (d.kind === 'category') return 35;
           return 15;
       }).strength(0.8))
-      .force("center", forceCenter(width / 2, height / 2).strength(0.05));
+      .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05));
 
     // 4. Rendering Elements
 
@@ -195,7 +181,7 @@ export const TheoryGraph: React.FC<TheoryGraphProps> = ({ codes, codings, layers
       .selectAll("g")
       .data(nodes)
       .join("g")
-      .call(d3Drag<any, any>()
+      .call(d3.drag<any, any>()
           .on("start", dragstarted)
           .on("drag", dragged)
           .on("end", dragended));
