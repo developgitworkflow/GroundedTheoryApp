@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Code, Coding } from '../types';
 import { 
@@ -501,7 +502,7 @@ const DeckCodeItem: React.FC<{ code: Code; isChild?: boolean } & OntologyDeckPro
                 className="flex items-center gap-1.5 pl-2 py-1 cursor-pointer active:cursor-grabbing hover:brightness-110 flex-1 min-w-0"
                 onClick={() => onNodeClick(code.id)}
             >
-                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
+                <Tag size={12} style={{ color: code.color }} className="shrink-0" />
                 <span className="text-xs truncate">{code.name}</span>
                 <span className="text-[9px] text-zinc-500 font-mono ml-0.5">{usageCount}</span>
             </div>
@@ -618,9 +619,10 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
                     {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </div>
                 
-                <div className="w-2 h-2 rounded-full mx-1 shrink-0" style={{ backgroundColor: code.color }} />
-                
-                {code.kind === 'category' ? <Folder size={14} className="text-amber-500/80 mr-1" /> : <Tag size={14} style={{ color: code.color }} className="mr-1" />}
+                {code.kind === 'category' ? 
+                    <Folder size={14} style={{ color: code.color }} className="mr-1" /> : 
+                    <Tag size={14} style={{ color: code.color }} className="mr-1" />
+                }
 
                 <span className="text-sm truncate flex-1">{code.name}</span>
                 
@@ -717,7 +719,7 @@ const OntologyTable: React.FC<OntologyTableProps> = ({ codes, codings, searchTer
                                         {code.kind === 'category' ? (
                                             <Folder size={14} style={{ color: code.color }} className="shrink-0" />
                                         ) : (
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
+                                            <Tag size={14} style={{ color: code.color }} className="shrink-0" />
                                         )}
                                         <span className="text-zinc-200 font-medium">{code.name}</span>
                                     </div>
