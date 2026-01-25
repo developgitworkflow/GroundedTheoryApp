@@ -16,7 +16,10 @@ import {
   Tag,
   Move,
   CornerDownRight,
-  BookType
+  BookType,
+  LayoutGrid,
+  Box,
+  Layers
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -26,10 +29,11 @@ import {
   DropdownMenuTrigger, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuSeparator,
+  DropdownMenuSeparator, 
   DropdownMenuLabel 
 } from './ui/dropdown-menu';
 import { Badge } from './ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { CodeEditDialog } from './CodeEditDialog';
 
 interface OntologyManagerProps {
@@ -57,7 +61,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   onElaborate,
   isElaborating
 }) => {
-  const [viewMode, setViewMode] = useState<'tree' | 'table'>('tree');
+  const [viewMode, setViewMode] = useState<'tree' | 'table' | 'deck'>('deck');
   const [searchTerm, setSearchTerm] = useState('');
   const [isRootDragOver, setIsRootDragOver] = useState(false);
   
@@ -71,9 +75,9 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   const rootCodes = useMemo(() => codes.filter(c => !c.parentId), [codes]);
   
   // Handlers
-  const handleOpenCreate = (parentId?: string) => {
+  const handleOpenCreate = (parentId?: string, kind: 'code' | 'category' = 'code') => {
       setDialogMode('create');
-      setEditingCode(undefined);
+      setEditingCode({ kind });
       setTargetParentId(parentId);
       setIsDialogOpen(true);
   };
@@ -151,6 +155,15 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                     <Button 
                         size="icon" 
                         variant="ghost" 
+                        className={cn("h-6 w-6 rounded-sm", viewMode === 'deck' ? "bg-zinc-800 text-white" : "text-zinc-500")}
+                        onClick={() => setViewMode('deck')}
+                        title="Deck View"
+                    >
+                        <LayoutGrid size={14} />
+                    </Button>
+                    <Button 
+                        size="icon" 
+                        variant="ghost" 
                         className={cn("h-6 w-6 rounded-sm", viewMode === 'tree' ? "bg-zinc-800 text-white" : "text-zinc-500")}
                         onClick={() => setViewMode('tree')}
                         title="Tree View"
@@ -175,7 +188,7 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                         className="h-7 text-xs border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white"
                         onClick={() => handleOpenCreate(undefined)}
                     >
-                        <Plus size={12} className="mr-1" /> Code
+                        <Plus size={12} className="mr-1" /> New
                     </Button>
                     <Button 
                          variant="ghost" 
@@ -201,7 +214,22 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
             onDragLeave={viewMode === 'tree' ? handleRootDragLeave : undefined}
             onDrop={viewMode === 'tree' ? handleRootDrop : undefined}
         >
-            {viewMode === 'tree' ? (
+            {viewMode === 'deck' && (
+                <OntologyDeck 
+                    codes={codes}
+                    codings={codings}
+                    searchTerm={searchTerm}
+                    selectedCodeId={selectedCodeId}
+                    onNodeClick={onNodeClick}
+                    onUpdateCode={onUpdateCode}
+                    onDeleteCode={onDeleteCode}
+                    onEditCode={handleOpenEdit}
+                    onCreateCode={handleOpenCreate}
+                    onCodeDrop={onCodeDrop}
+                />
+            )}
+
+            {viewMode === 'tree' && (
                 <div className="space-y-1 min-h-[300px] relative">
                     {rootCodes.length === 0 && <div className="text-zinc-600 text-xs text-center py-4">No codes defined. Create one to begin.</div>}
                     {rootCodes.map(code => (
@@ -232,7 +260,9 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
                         </Button>
                     </div>
                 </div>
-            ) : (
+            )}
+            
+            {viewMode === 'table' && (
                 <OntologyTable 
                     codes={codes}
                     codings={codings}
@@ -248,6 +278,234 @@ export const OntologyManager: React.FC<OntologyManagerProps> = ({
   );
 };
 
+// --- DECK VIEW COMPONENTS ---
+
+interface OntologyDeckProps {
+    codes: Code[];
+    codings: Coding[];
+    searchTerm: string;
+    selectedCodeId?: string | null;
+    onNodeClick: (id: string) => void;
+    onUpdateCode: (id: string, updates: Partial<Code>) => void;
+    onDeleteCode: (id: string) => void;
+    onEditCode: (code: Code) => void;
+    onCreateCode: (parentId?: string, kind?: 'code' | 'category') => void;
+    onCodeDrop: (sourceId: string, targetId: string) => void;
+}
+
+const OntologyDeck: React.FC<OntologyDeckProps> = (props) => {
+    const { codes, searchTerm, onCreateCode, onCodeDrop } = props;
+
+    // Filter
+    const filteredCodes = codes.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // Grouping
+    const categories = filteredCodes.filter(c => c.kind === 'category');
+    const openCodes = filteredCodes.filter(c => c.kind === 'code' && !c.parentId);
+
+    // Root Drop for Deck (Moving codes back to Open Codes)
+    const handleRootDeckDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (!draggedId) return;
+        
+        // Find if dragged item exists and has parent (is inside a category)
+        const code = codes.find(c => c.id === draggedId);
+        if (code && code.parentId) {
+            props.onUpdateCode(draggedId, { parentId: undefined });
+        }
+    };
+
+    return (
+        <div className="space-y-8 pb-10">
+            {/* Categories Section */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                        <Box size={14} className="text-amber-500" /> Categories ({categories.length})
+                    </h3>
+                    <Button variant="ghost" size="xs" onClick={() => onCreateCode(undefined, 'category')} className="h-6 text-zinc-500 hover:text-amber-500">
+                        <Plus size={12} className="mr-1" /> Add
+                    </Button>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                    {categories.map(cat => (
+                        <DeckCategoryCard key={cat.id} category={cat} {...props} />
+                    ))}
+                    {categories.length === 0 && (
+                        <div className="border border-dashed border-zinc-800 rounded-lg p-6 text-center text-zinc-600 text-xs italic">
+                            No categories defined. Create a category to organize your codes.
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Open Codes Section */}
+            <div 
+                className="space-y-3"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleRootDeckDrop}
+            >
+                <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                        <Tag size={14} className="text-blue-500" /> Open Codes ({openCodes.length})
+                    </h3>
+                    <Button variant="ghost" size="xs" onClick={() => onCreateCode(undefined, 'code')} className="h-6 text-zinc-500 hover:text-blue-500">
+                        <Plus size={12} className="mr-1" /> Add
+                    </Button>
+                </div>
+                
+                {openCodes.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 p-3 bg-zinc-950/50 border border-zinc-800/50 rounded-lg min-h-[80px]">
+                        {openCodes.map(code => (
+                            <DeckCodeItem key={code.id} code={code} {...props} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="border border-dashed border-zinc-800 rounded-lg p-6 text-center text-zinc-600 text-xs italic min-h-[80px] flex items-center justify-center">
+                        No loose codes. Drag codes here to unassign them from categories.
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const DeckCategoryCard: React.FC<{ category: Code } & OntologyDeckProps> = (props) => {
+    const { category, codes, codings, onCodeDrop, onNodeClick, selectedCodeId, onEditCode, onDeleteCode } = props;
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    // Get children
+    const childCodes = codes.filter(c => c.parentId === category.id);
+    const usageCount = codings.filter(c => c.codeId === category.id).length;
+    const childUsageCount = codings.filter(c => childCodes.map(child => child.id).includes(c.codeId)).length;
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const sourceId = e.dataTransfer.getData('text/plain');
+        if (sourceId && sourceId !== category.id) {
+            onCodeDrop(sourceId, category.id);
+        }
+    };
+
+    return (
+        <Card 
+            className={cn(
+                "bg-zinc-900 border-zinc-800 shadow-sm transition-all",
+                isDragOver ? "ring-2 ring-amber-500/50 bg-zinc-800" : "hover:border-zinc-700"
+            )}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+        >
+            <div className="h-1 w-full rounded-t-lg" style={{ backgroundColor: category.color }} />
+            <div className="p-3">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <h4 
+                                className={cn(
+                                    "text-sm font-bold truncate cursor-pointer hover:underline",
+                                    selectedCodeId === category.id ? "text-amber-400" : "text-zinc-200"
+                                )}
+                                onClick={() => onNodeClick(category.id)}
+                            >
+                                {category.name}
+                            </h4>
+                            {category.isCore && <Badge variant="secondary" className="text-[9px] h-4 px-1 bg-yellow-900/20 text-yellow-500">CORE</Badge>}
+                        </div>
+                        {category.description && <p className="text-[10px] text-zinc-500 line-clamp-1 mt-0.5">{category.description}</p>}
+                    </div>
+                    
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300">
+                                <MoreHorizontal size={14} />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800">
+                            <DropdownMenuItem onClick={() => onEditCode(category)}>Edit Category</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => props.onCreateCode(category.id, 'code')}>Add Child Code</DropdownMenuItem>
+                            <DropdownMenuSeparator className="bg-zinc-800"/>
+                            <DropdownMenuItem onClick={() => onDeleteCode(category.id)} className="text-red-500">Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+
+                {/* Children Container */}
+                <div className="bg-zinc-950/50 rounded-md border border-zinc-800/50 p-2 min-h-[60px]">
+                    {childCodes.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                            {childCodes.map(code => (
+                                <DeckCodeItem key={code.id} code={code} {...props} isChild />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="h-full flex items-center justify-center text-[10px] text-zinc-600 italic">
+                            Drag codes here
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Stats */}
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-800/30 text-[10px] text-zinc-500">
+                    <span title="Total codings in this category and children">Total Refs: {usageCount + childUsageCount}</span>
+                    <span>{childCodes.length} Codes</span>
+                </div>
+            </div>
+        </Card>
+    );
+};
+
+const DeckCodeItem: React.FC<{ code: Code; isChild?: boolean } & OntologyDeckProps> = (props) => {
+    const { code, codings, onNodeClick, selectedCodeId, onEditCode, onDeleteCode, isChild } = props;
+    const usageCount = codings.filter(c => c.codeId === code.id).length;
+
+    const handleDragStart = (e: React.DragEvent) => {
+        e.dataTransfer.setData('text/plain', code.id);
+        e.stopPropagation();
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <div 
+                    draggable
+                    onDragStart={handleDragStart}
+                    className={cn(
+                        "group flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border cursor-pointer select-none transition-all active:cursor-grabbing max-w-full",
+                        selectedCodeId === code.id 
+                            ? "bg-blue-900/30 border-blue-500 text-blue-200" 
+                            : isChild 
+                                ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-600" 
+                                : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                    )}
+                    onClick={(e) => {
+                        // Prevent menu trigger on simple click if we want selection logic
+                        // But context menu is better for actions.
+                        // We'll use right click for menu in a real app, but here left click selects, long press or specific button for menu?
+                        // Using Trigger asChild wraps this div. 
+                        onNodeClick(code.id);
+                    }}
+                >
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
+                    <span className="text-xs truncate max-w-[120px]">{code.name}</span>
+                    <span className="text-[9px] text-zinc-500 font-mono ml-1">{usageCount}</span>
+                </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="bg-zinc-950 border-zinc-800 z-50">
+                <DropdownMenuLabel className="text-xs text-zinc-500">{code.name}</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => onEditCode(code)}>Edit</DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-zinc-800"/>
+                <DropdownMenuItem onClick={() => onDeleteCode(code.id)} className="text-red-500">Delete</DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+};
+
+// ... TreeItem and OntologyTable components remain same as previous version ...
 interface TreeItemProps {
     code: Code;
     allCodes: Code[];
@@ -502,7 +760,7 @@ const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpd
                     variant="secondary" 
                     size="sm" 
                     className="w-full text-xs"
-                    onClick={onCreateCode}
+                    onClick={() => onCreateCode(undefined)}
                 >
                      <Plus size={12} className="mr-2" /> Add New Row
                  </Button>
