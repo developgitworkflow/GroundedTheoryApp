@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ProjectSettings, Memo, Artifact, Code, ResearchTeam } from '../types';
 import { 
@@ -8,22 +7,22 @@ import {
   Copy, 
   Save, 
   RefreshCw,
-  BookOpen,
-  Quote,
-  Target,
-  Microscope,
-  Lightbulb,
-  ScrollText,
-  ShieldCheck,
-  Globe,
-  Database,
-  Repeat,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Archive,
-  GripVertical,
-  Link as LinkIcon,
+  BookOpen, 
+  Quote, 
+  Target, 
+  Microscope, 
+  Lightbulb, 
+  ScrollText, 
+  ShieldCheck, 
+  Globe, 
+  Database, 
+  Repeat, 
+  CheckCircle2, 
+  XCircle, 
+  AlertTriangle, 
+  Archive, 
+  GripVertical, 
+  Link as LinkIcon, 
   X
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
@@ -240,7 +239,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
                     <div className="flex-1 overflow-y-auto p-2 space-y-2">
                         {artifacts.map(art => {
                             // Check if mapped anywhere
-                            const isMapped = Object.values(artifactMapping).some(list => list.includes(art.id));
+                            const isMapped = (Object.values(artifactMapping) as string[][]).some(list => list.includes(art.id));
                             return (
                                 <div 
                                     key={art.id}

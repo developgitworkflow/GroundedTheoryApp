@@ -871,6 +871,7 @@ export default function App() {
                         artifacts={artifacts}
                         settings={projectSettings}
                         memos={memos}
+                        team={researchTeam}
                     />
                 )}
 
