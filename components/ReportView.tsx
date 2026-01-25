@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { ProjectSettings, Memo, Artifact, Code, ResearchTeam } from '../types';
 import { 
@@ -19,7 +20,8 @@ import {
   Repeat,
   CheckCircle2,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  Archive
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -33,6 +35,7 @@ interface ReportViewProps {
   codes: Code[];
   artifacts: Artifact[];
   onUpdateSettings: (settings: ProjectSettings) => void;
+  onConvertToArtifact?: (title: string, content: string, typeSource: string, sourceId?: string) => void;
 }
 
 export const ReportView: React.FC<ReportViewProps> = ({ 
@@ -40,7 +43,8 @@ export const ReportView: React.FC<ReportViewProps> = ({
   memos, 
   codes,
   artifacts,
-  onUpdateSettings 
+  onUpdateSettings,
+  onConvertToArtifact
 }) => {
   const [viewMode, setViewMode] = useState<'abstract' | 'fair'>('abstract');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -109,6 +113,12 @@ export const ReportView: React.FC<ReportViewProps> = ({
       `.trim();
       navigator.clipboard.writeText(fullText);
       alert("Abstract copied to clipboard!");
+  };
+
+  const handleSaveAsArtifact = () => {
+      if (!onConvertToArtifact) return;
+      const content = `# ${settings.projectName} - Structured Abstract\n\n**Background:**\n${abstract.background}\n\n**Methods:**\n${abstract.methods}\n\n**Results:**\n${abstract.results}\n\n**Conclusion:**\n${abstract.conclusion}\n\n**Keywords:**\n${abstract.keywords}`;
+      onConvertToArtifact('Structured Abstract', content, 'Report');
   };
 
   // --- FAIR Calculation ---
@@ -197,12 +207,23 @@ export const ReportView: React.FC<ReportViewProps> = ({
                         </div>
                     </div>
 
-                    <Button 
-                        className="mt-auto bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-900/20"
-                        onClick={handleAutoGenerate}
-                    >
-                        <Sparkles size={16} /> Auto-Generate
-                    </Button>
+                    <div className="mt-auto space-y-2">
+                        <Button 
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-900/20"
+                            onClick={handleAutoGenerate}
+                        >
+                            <Sparkles size={16} /> Auto-Generate
+                        </Button>
+                        {onConvertToArtifact && (
+                            <Button 
+                                variant="outline"
+                                className="w-full gap-2 border-zinc-700 text-zinc-400 hover:text-white"
+                                onClick={handleSaveAsArtifact}
+                            >
+                                <Archive size={16} /> Save as Artifact
+                            </Button>
+                        )}
+                    </div>
                 </>
             )}
             

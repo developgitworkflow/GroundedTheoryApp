@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { LayerControl } from './components/LayerControl';
 import { ArtifactView } from './components/ArtifactView';
@@ -875,6 +876,7 @@ export default function App() {
                         codes={codes}
                         artifacts={artifacts}
                         onUpdateSettings={(s) => setProjectSettings(s)}
+                        onConvertToArtifact={handleConvertToArtifact}
                     />
                 )}
                 
