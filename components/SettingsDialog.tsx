@@ -58,6 +58,7 @@ interface SettingsDialogProps {
   activeResearcherId?: string;
   onSave: (settings: ProjectSettings, team?: ResearchTeam, memos?: Memo[]) => void;
   onImportProject: (data: any) => void;
+  onConvertToArtifact?: (title: string, content: string, typeSource: string, sourceId?: string) => void;
 }
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ 
@@ -71,7 +72,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   artifacts,
   activeResearcherId,
   onSave,
-  onImportProject
+  onImportProject,
+  onConvertToArtifact
 }) => {
   const [localSettings, setLocalSettings] = useState<ProjectSettings>(settings);
   const [localTeam, setLocalTeam] = useState<ResearchTeam>(team || { id: 'default', researchers: [], consensusCriteria: [] });
@@ -544,7 +546,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 
                 {activeTab === 'general' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                        <SectionHeader title="Project Metadata" description="Core information about this research project." />
+                        <div className="flex justify-between items-start">
+                            <SectionHeader title="Project Metadata" description="Core information about this research project." />
+                            {onConvertToArtifact && (
+                                <Button 
+                                    size="xs" 
+                                    variant="outline" 
+                                    onClick={() => {
+                                        const content = `# Project Definition: ${localSettings.projectName}\n\n**Description**\nStudy of ${localSettings.fieldOfStudy.subjectOfStudy} focusing on ${localSettings.fieldOfStudy.objectOfStudy} in ${localSettings.fieldOfStudy.location}.`;
+                                        onConvertToArtifact('Project Definition', content, 'Metadata');
+                                    }}
+                                    className="gap-2 text-zinc-400 hover:text-white"
+                                >
+                                    <FileText size={14}/> Save as Artifact
+                                </Button>
+                            )}
+                        </div>
                         
                         <div className="grid gap-4">
                             <div className="grid gap-2">
@@ -671,7 +688,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
                              <SectionHeader title="Participants (Actors)" description="Individuals involved in the research. Assign anonymized codes." />
-                             <Button size="xs" variant="brand" onClick={addParticipant} className="gap-2"><Plus size={14}/> Add Actor</Button>
+                             <div className="flex gap-2">
+                                {onConvertToArtifact && (
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            const content = `# Participant Registry\n\n| Code | Description | Role |\n|---|---|---|\n${localSettings.participants.map(p => `| ${p.anonymizedCode} | ${p.description} | ${p.isCoConstructor ? 'Co-Constructor' : 'Participant'} |`).join('\n')}`;
+                                            onConvertToArtifact('Participant Registry', content, 'Participants');
+                                        }}
+                                        className="gap-2 text-zinc-400 hover:text-white"
+                                    >
+                                        <FileText size={14}/> Save as Artifact
+                                    </Button>
+                                )}
+                                <Button size="xs" variant="brand" onClick={addParticipant} className="gap-2"><Plus size={14}/> Add Actor</Button>
+                             </div>
                         </div>
                         
                         <div className="space-y-3">
@@ -722,7 +754,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         <div>
                              <div className="flex justify-between items-start mb-4">
                                 <SectionHeader title="Research Questions" description="The questions guiding the inquiry." />
-                                <Button size="xs" variant="outline" onClick={addRQ} className="gap-2"><Plus size={14}/> Add RQ</Button>
+                                <div className="flex gap-2">
+                                    {onConvertToArtifact && (
+                                        <Button 
+                                            size="xs" 
+                                            variant="outline" 
+                                            onClick={() => {
+                                                const content = `# Research Design\n\n## Research Questions\n${localSettings.theoreticalFramework.researchQuestions.map(rq => `1. ${rq.content}`).join('\n')}\n\n## Methods\n${localSettings.theoreticalFramework.methods.map(m => `### ${m.type}\n${m.protocolContent}\n`).join('\n')}`;
+                                                onConvertToArtifact('Research Design', content, 'Methodology');
+                                            }}
+                                            className="gap-2 text-zinc-400 hover:text-white"
+                                        >
+                                            <FileText size={14}/> Save as Artifact
+                                        </Button>
+                                    )}
+                                    <Button size="xs" variant="outline" onClick={addRQ} className="gap-2"><Plus size={14}/> Add RQ</Button>
+                                </div>
                              </div>
                              <div className="space-y-3">
                                 {localSettings.theoreticalFramework.researchQuestions.map(rq => (
@@ -862,7 +909,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 
                 {activeTab === 'abstract' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                         <SectionHeader title="Structured Abstract" description="Draft the core components of your research paper." />
+                         <div className="flex justify-between items-start">
+                             <SectionHeader title="Structured Abstract" description="Draft the core components of your research paper." />
+                             {onConvertToArtifact && (
+                                 <Button 
+                                     size="xs" 
+                                     variant="outline" 
+                                     onClick={() => {
+                                         const content = `# ${localSettings.projectName} - Abstract\n\n**Background:** ${localSettings.structuredAbstract.background}\n\n**Methods:** ${localSettings.structuredAbstract.methods}\n\n**Results:** ${localSettings.structuredAbstract.results}\n\n**Conclusion:** ${localSettings.structuredAbstract.conclusion}\n\n**Keywords:** ${localSettings.structuredAbstract.keywords}`;
+                                         onConvertToArtifact('Structured Abstract', content, 'Abstract');
+                                     }}
+                                     className="gap-2 text-zinc-400 hover:text-white"
+                                 >
+                                     <FileText size={14}/> Save as Artifact
+                                 </Button>
+                             )}
+                         </div>
 
                          <div className="space-y-5">
                              <div className="grid gap-2">
@@ -938,7 +1000,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                         <div>
                              <div className="flex justify-between items-start mb-4">
                                 <SectionHeader title="Research Tools" description="Software and instruments used." />
-                                <Button size="xs" variant="outline" onClick={addTool} className="gap-2"><Plus size={14}/> Add Tool</Button>
+                                <div className="flex gap-2">
+                                    {onConvertToArtifact && (
+                                        <Button 
+                                            size="xs" 
+                                            variant="outline" 
+                                            onClick={() => {
+                                                const content = `# Research Resources\n\n## Tools\n${localSettings.theoreticalFramework.tools.map(t => `* ${t.name} v${t.version || 'N/A'} - ${t.referenceURL || 'No URL'}`).join('\n')}\n\n## Bibliography\n${localSettings.theoreticalFramework.bibliographyContent}`;
+                                                onConvertToArtifact('Resources & Bibliography', content, 'Resources');
+                                            }}
+                                            className="gap-2 text-zinc-400 hover:text-white"
+                                        >
+                                            <FileText size={14}/> Save as Artifact
+                                        </Button>
+                                    )}
+                                    <Button size="xs" variant="outline" onClick={addTool} className="gap-2"><Plus size={14}/> Add Tool</Button>
+                                </div>
                              </div>
                              <div className="space-y-2">
                                 {localSettings.theoreticalFramework.tools.map(t => (
@@ -1006,7 +1083,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
                              <SectionHeader title="Research Team" description="Manage researchers and assign role-based permissions." />
-                             <Button size="xs" variant="brand" onClick={addResearcher} className="gap-2"><Plus size={14}/> Add Researcher</Button>
+                             <div className="flex gap-2">
+                                {onConvertToArtifact && (
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            const content = `# Team Charter\n\n## Researchers\n${localTeam.researchers.map(r => `* ${r.name} (${r.role}) - [${r.initials}]`).join('\n')}\n\n## Consensus Criteria\n${localTeam.consensusCriteria.map(c => `* ${c.name} (${c.votingType}): ${c.description} (Active: ${c.active ? 'Yes' : 'No'})`).join('\n')}`;
+                                            onConvertToArtifact('Team Charter', content, 'Team');
+                                        }}
+                                        className="gap-2 text-zinc-400 hover:text-white"
+                                    >
+                                        <FileText size={14}/> Save as Artifact
+                                    </Button>
+                                )}
+                                <Button size="xs" variant="brand" onClick={addResearcher} className="gap-2"><Plus size={14}/> Add Researcher</Button>
+                             </div>
                         </div>
                         
                         <div className="space-y-3">
@@ -1119,7 +1211,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                 {activeTab === 'theory' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                        <SectionHeader title="Grounded Theory Approach" description="Define the methodological framework guiding your analysis." />
+                        <div className="flex justify-between items-start">
+                            <SectionHeader title="Grounded Theory Approach" description="Define the methodological framework guiding your analysis." />
+                            {onConvertToArtifact && (
+                                <Button 
+                                    size="xs" 
+                                    variant="outline" 
+                                    onClick={() => {
+                                        const content = `# Theoretical Stance\n\n**Selected Approach**: ${localSettings.theoryType}\n\n*Note: This setting influences the analysis workflow and coding terminology used throughout the application.*`;
+                                        onConvertToArtifact('Theoretical Stance', content, 'Theory');
+                                    }}
+                                    className="gap-2 text-zinc-400 hover:text-white"
+                                >
+                                    <FileText size={14}/> Save as Artifact
+                                </Button>
+                            )}
+                        </div>
                         
                         <div className="grid gap-4">
                             {/* Constructivist */}

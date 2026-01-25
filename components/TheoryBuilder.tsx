@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact, ProjectSettings } from '../types';
 import { 
@@ -13,7 +14,7 @@ import {
     Quote, 
     ChevronDown, 
     StickyNote, 
-    Lightbulb,
+    Lightbulb, 
     Plus,
     Network,
     Edit,
@@ -53,6 +54,7 @@ interface TheoryBuilderProps {
   theoryArtefact: Theory; 
   settings?: ProjectSettings; 
   onOpenSettings?: () => void; 
+  onConvertToArtifact?: (title: string, content: string, typeSource: string, sourceId?: string) => void;
 }
 
 export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({ 
@@ -70,7 +72,8 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
     onUpdateCode,
     theoryArtefact,
     settings,
-    onOpenSettings
+    onOpenSettings,
+    onConvertToArtifact
 }) => {
   const [selectedCoreId, setSelectedCoreId] = useState<string>(codes.find(c => c.isCore)?.id || '');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -561,6 +564,17 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                     {isGenerating ? <Sparkles className="animate-spin text-purple-400" size={12}/> : <Sparkles className="text-purple-400" size={12}/>}
                                     AI Assist
                                 </Button>
+                                {onConvertToArtifact && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="gap-2 text-xs border-zinc-700 hover:bg-zinc-800 text-zinc-400 hover:text-white"
+                                        onClick={() => onConvertToArtifact('Theory Narrative', narrativeContent, 'Theory')}
+                                        title="Save Narrative as Document"
+                                    >
+                                        <Save size={14} />
+                                    </Button>
+                                )}
                             </div>
                         </div>
 

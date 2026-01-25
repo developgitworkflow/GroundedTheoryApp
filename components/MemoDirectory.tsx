@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Memo, Artifact, MEMO_TYPES, MemoCategory } from '../types';
 import { StickyNote, Book, Lightbulb, Search, Calendar, FileText, Filter, Trash2 } from 'lucide-react';
@@ -12,9 +13,10 @@ interface MemoDirectoryProps {
   artifacts: Artifact[];
   onSelectMemo: (memo: Memo) => void;
   onDeleteMemo?: (id: string) => void;
+  onConvertToArtifact?: (title: string, content: string, typeSource: string, sourceId?: string) => void;
 }
 
-export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, onSelectMemo, onDeleteMemo }) => {
+export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, onSelectMemo, onDeleteMemo, onConvertToArtifact }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
 
@@ -87,9 +89,21 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
                     >
                         <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: typeInfo?.color || '#3f3f46' }} />
                         
-                        {/* Delete Action (Top Right) - Improved visibility and hit area */}
-                        {onDeleteMemo && (
-                            <div className="absolute top-1 right-1 z-10">
+                        {/* Actions (Top Right) */}
+                        <div className="absolute top-1 right-1 z-10 flex gap-1">
+                            {onConvertToArtifact && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onConvertToArtifact(memo.title, memo.content, 'Memo', memo.id);
+                                    }}
+                                    className="h-7 w-7 flex items-center justify-center text-zinc-600 hover:text-blue-400 hover:bg-zinc-950/80 rounded transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                    title="Convert to Document"
+                                >
+                                    <FileText size={14} />
+                                </button>
+                            )}
+                            {onDeleteMemo && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -100,8 +114,8 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
                                 >
                                     <Trash2 size={14} />
                                 </button>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         <div className="flex items-start justify-between gap-2 mb-2 pl-2">
                             <MemoTypeBadge type={memo.type} className="text-[9px] h-5" />

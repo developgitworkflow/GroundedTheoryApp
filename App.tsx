@@ -296,6 +296,29 @@ export default function App() {
       addJournalEntry(`Received new artifact into ${newArt.status}: ${newArt.name}`, 'auto');
   };
 
+  const handleConvertToArtifact = (title: string, content: string, typeSource: string, sourceId?: string) => {
+      const newArt: Artifact = {
+          id: `a-gen-${Date.now()}`,
+          hashID: Math.random().toString(36).substring(2),
+          name: `Extracted: ${title}`,
+          type: 'document',
+          media: 'text',
+          access: 'private',
+          status: 'analysis',
+          responsibleId: activeResearcherId,
+          content: `# ${title}\n\n**Source Type:** ${typeSource}\n**Source ID:** ${sourceId || 'N/A'}\n\n---\n\n${content}`,
+          curation: {
+              format: 'Markdown',
+              source: `System Generated (${typeSource})`,
+              dateCreated: new Date().toISOString(),
+              consentObtained: true, // Internal derived data
+              preservationNotes: 'Derived from internal app element.'
+          }
+      };
+      setArtifacts(prev => [...prev, newArt]);
+      addJournalEntry(`Converted ${typeSource} [${title}] into new Artifact`, 'auto');
+  };
+
   const handleAddCoding = (coding: Omit<Coding, 'id'>) => {
     const newCoding: Coding = {
       ...coding,
@@ -750,6 +773,7 @@ export default function App() {
                                             }
                                         }}
                                         onDeleteMemo={handleDeleteMemo}
+                                        onConvertToArtifact={handleConvertToArtifact}
                                     />
                                  )}
                              </div>
@@ -806,6 +830,7 @@ export default function App() {
                         theoryArtefact={theoryArtefact}
                         settings={projectSettings}
                         onOpenSettings={() => setIsSettingsOpen(true)}
+                        onConvertToArtifact={handleConvertToArtifact}
                     />
                 )}
 
@@ -816,6 +841,7 @@ export default function App() {
                         codings={codings}
                         artifacts={artifacts}
                         settings={projectSettings}
+                        memos={memos}
                     />
                 )}
 
@@ -862,6 +888,7 @@ export default function App() {
                 }
             }}
             onImportProject={handleImportProject}
+            onConvertToArtifact={handleConvertToArtifact}
         />
     </div>
   );

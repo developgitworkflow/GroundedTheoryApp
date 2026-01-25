@@ -1,4 +1,4 @@
-import { Code, Coding } from '../types';
+import { Code, Coding, Memo, ProjectSettings } from '../types';
 
 export interface GraphNode {
   id: string;
@@ -7,13 +7,15 @@ export interface GraphNode {
   group: number;
   val: number;
   isCore: boolean;
-  kind: 'code' | 'category';
+  kind: 'code' | 'category' | 'finding' | 'rq' | 'method';
   parentId?: string;
   // D3 properties
   x?: number;
   y?: number;
   fx?: number | null;
   fy?: number | null;
+  // Full object reference for inspector
+  fullObj?: any; 
 }
 
 export interface GraphLink {
@@ -25,32 +27,21 @@ export interface GraphLink {
 
 /**
  * Transforms Codes and Codings into a Node/Link graph structure.
- * 
- * Logic:
- * 1. Nodes: Created for every Code and Category.
- * 2. Hierarchy Links: Created between Codes and their Parent Category (Strong structural bond).
- * 3. Association Links: Created between Codes that appear in the same Artifact (Data-driven bond).
+ * Optionally integrates Project Ontology (RQs, Methods, Findings).
  */
-export const buildTheoryGraph = (codes: Code[] = [], codings: Coding[] = []): { nodes: GraphNode[], links: GraphLink[] } => {
+export const buildTheoryGraph = (
+    codes: Code[] = [], 
+    codings: Coding[] = [], 
+    memos?: Memo[], 
+    settings?: ProjectSettings
+): { nodes: GraphNode[], links: GraphLink[] } => {
   // Defensive checks
   if (!codes) codes = [];
   if (!codings) codings = [];
 
-  // 1. Prepare Nodes
-  const nodes: GraphNode[] = codes.map(c => ({
-    id: c.id,
-    name: c.name,
-    color: c.isCore ? '#f59e0b' : c.color,
-    group: c.kind === 'category' ? 2 : 1,
-    // Base size: Categories are larger. Core is largest. Usage adds weight.
-    val: (c.kind === 'category' ? 10 : 2) + codings.filter(coding => coding.codeId === c.id).length,
-    isCore: !!c.isCore,
-    kind: c.kind,
-    parentId: c.parentId
-  }));
-
+  const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
-  const linkMap = new Set<string>(); // To prevent duplicates
+  const linkSet = new Set<string>();
 
   const addLink = (source: string, target: string, type: GraphLink['type'], weight = 1) => {
       // Ensure canonical ordering for ID key to prevent A->B and B->A dupes
@@ -63,8 +54,6 @@ export const buildTheoryGraph = (codes: Code[] = [], codings: Coding[] = []): { 
       );
 
       if (existingIndex >= 0) {
-          // If a hierarchy link already exists, don't overwrite it with association, 
-          // but if it's association, increase weight.
           if (links[existingIndex].type === 'association' && type === 'association') {
               links[existingIndex].value += weight;
           }
@@ -73,15 +62,29 @@ export const buildTheoryGraph = (codes: Code[] = [], codings: Coding[] = []): { 
       }
   };
 
-  // 2. Hierarchy Links (Explicit Ontology)
-  // Connect Child Code -> Parent Category
+  // 1. Codes & Categories
+  codes.forEach(c => {
+      nodes.push({
+        id: c.id,
+        name: c.name,
+        color: c.isCore ? '#f59e0b' : c.color,
+        group: c.kind === 'category' ? 2 : 1,
+        val: (c.kind === 'category' ? 10 : 2) + codings.filter(coding => coding.codeId === c.id).length,
+        isCore: !!c.isCore,
+        kind: c.kind,
+        parentId: c.parentId,
+        fullObj: c
+      });
+  });
+
+  // 2. Hierarchy Links (Codes)
   codes.forEach(c => {
       if (c.parentId) {
-          addLink(c.id, c.parentId, 'hierarchy', 5); // Stronger weight for hierarchy
+          addLink(c.id, c.parentId, 'hierarchy', 5);
       }
   });
 
-  // 3. Association Links (Co-occurrence in Data)
+  // 3. Association Links (Codes)
   const artifactGroups: Record<string, string[]> = {};
   codings.forEach(c => {
     if (!artifactGroups[c.artifactId]) artifactGroups[c.artifactId] = [];
@@ -95,15 +98,71 @@ export const buildTheoryGraph = (codes: Code[] = [], codings: Coding[] = []): { 
       }
     }
   });
+
+  // 4. Extended Ontology (RQs, Findings, Methods)
+  if (memos && settings) {
+      // Research Questions
+      settings.theoreticalFramework.researchQuestions.forEach(rq => {
+          nodes.push({
+              id: rq.id,
+              name: rq.content.length > 30 ? rq.content.substring(0, 30) + '...' : rq.content,
+              color: '#3b82f6', // Blue
+              group: 3,
+              val: 12,
+              isCore: false,
+              kind: 'rq',
+              fullObj: rq
+          });
+      });
+
+      // Methods
+      settings.theoreticalFramework.methods.forEach(m => {
+          nodes.push({
+              id: m.id,
+              name: `${m.type} Protocol`,
+              color: '#8b5cf6', // Purple
+              group: 5,
+              val: 8,
+              isCore: false,
+              kind: 'method',
+              fullObj: m
+          });
+          // Link Method -> RQ? Not explicit in type def but logical. 
+          // Assuming for now methods serve all RQs or unlinked.
+      });
+
+      // Findings (Memos with type 'finding')
+      const findings = memos.filter(m => m.type === 'finding');
+      findings.forEach(f => {
+          nodes.push({
+              id: f.id,
+              name: f.title,
+              color: '#10b981', // Emerald
+              group: 4,
+              val: 10,
+              isCore: false,
+              kind: 'finding',
+              fullObj: f
+          });
+
+          // Link Finding -> RQs (via relatedIds)
+          f.relatedIds.forEach(rid => {
+              if (settings.theoreticalFramework.researchQuestions.some(rq => rq.id === rid)) {
+                  addLink(f.id, rid, 'theoretical', 3);
+              }
+              // Link Finding -> Codes (via relatedIds)
+              if (codes.some(c => c.id === rid)) {
+                  addLink(f.id, rid, 'theoretical', 2);
+              }
+          });
+      });
+  }
   
-  // 4. Core Category Theoretical Links
-  // Ensure the Core Category acts as a gravity well
+  // 5. Core Category Gravity
   const coreNode = nodes.find(n => n.isCore);
   if (coreNode) {
       nodes.forEach(n => {
           if (n.id !== coreNode.id && n.kind === 'category') {
-              // Create a 'theoretical' link to other categories if no direct hierarchy exists
-              // This visualizes the core category pulling other concepts together
               addLink(n.id, coreNode.id, 'theoretical', 0.5);
           }
       });
