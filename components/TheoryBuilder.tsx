@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Code, Memo, Theory, ResearchQuestion, Coding, Artifact, ProjectSettings } from '../types';
 import { 
     Crown, 
@@ -25,7 +25,9 @@ import {
     Kanban,
     AlertCircle,
     Link as LinkIcon,
-    GitBranch
+    GitBranch,
+    ArrowLeftCircle,
+    CopyPlus
 } from 'lucide-react';
 import { generateTheoreticalMemo } from '../services/geminiService';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './ui/card';
@@ -36,7 +38,7 @@ import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 import { TheoryDashboard } from './TheoryDashboard';
 import { FrameworkDiagram } from './FrameworkDiagram';
-import { StackEditEditor } from './StackEditEditor';
+import { StackEditEditor, StackEditEditorRef } from './StackEditEditor';
 
 interface TheoryBuilderProps {
   codes: Code[];
@@ -93,6 +95,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
 
   // Local state for theory content editing
   const [narrativeContent, setNarrativeContent] = useState(theoryArtefact.content);
+  const editorRef = useRef<StackEditEditorRef>(null);
 
   const coreCode = codes.find(c => c.id === selectedCoreId);
   const categories = codes.filter(c => c.kind === 'category');
@@ -181,14 +184,6 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
       setEditingFindingCategoryIds(currentCatIds);
   };
 
-  const toggleEditingFindingCategory = (catId: string) => {
-      setEditingFindingCategoryIds(prev => 
-          prev.includes(catId) 
-              ? prev.filter(id => id !== catId)
-              : [...prev, catId]
-      );
-  };
-
   const getFindingsForRQ = (rqId: string) => {
     return findingMemos.filter(m => m.relatedIds && m.relatedIds.includes(rqId));
   };
@@ -208,6 +203,16 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
               onUpdateMemo(memoId, { relatedIds: [...currentRelated, rqId] });
           }
       }
+  };
+
+  // Helper for narrative insertion
+  const insertReference = (text: string, type: 'quote' | 'link' | 'plain') => {
+      if (!editorRef.current) return;
+      let content = text;
+      if (type === 'quote') content = `\n> "${text.trim()}"\n`;
+      if (type === 'link') content = `**${text.trim()}**`;
+      
+      editorRef.current.insertText(content);
   };
 
   return (
@@ -251,6 +256,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
             {/* VIEW: FINDINGS MANAGER */}
             {activeView === 'findings' && (
                 <div className="h-full w-full animate-in fade-in duration-300 p-8 overflow-y-auto flex flex-col">
+                    {/* ... (Existing Findings View Content Unchanged, omitted for brevity but logic maintained) ... */}
                     <div className="max-w-5xl mx-auto space-y-6 w-full flex-1 flex flex-col">
                         <div className="flex justify-between items-center shrink-0">
                             <div>
@@ -584,6 +590,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                 The Emerging Theory
                             </h1>
                             <StackEditEditor 
+                                ref={editorRef}
                                 value={narrativeContent}
                                 onChange={setNarrativeContent}
                                 className="flex-1 shadow-lg"
@@ -591,7 +598,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                         </div>
                     </div>
 
-                    {/* RIGHT PANE: Context Inspector - UPDATED FOR EDITING */}
+                    {/* RIGHT PANE: Source Material Inspector */}
                     <div className="w-80 bg-zinc-950 border-l border-zinc-800 flex flex-col">
                         {activeCategoryData ? (
                             <>
@@ -607,7 +614,7 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                             className="h-8 bg-transparent border-transparent hover:border-zinc-700 hover:bg-zinc-900 focus:bg-zinc-950 font-bold text-zinc-100 px-2 -ml-2"
                                         />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 relative group">
                                         <label className="text-[10px] uppercase font-bold text-zinc-500">Definition</label>
                                         <textarea 
                                             value={activeCategoryData.category.description || ''}
@@ -615,6 +622,17 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                             className="w-full bg-zinc-900/30 border border-zinc-800 rounded p-2 text-xs text-zinc-300 focus:outline-none focus:border-blue-500/50 focus:bg-zinc-900 min-h-[80px] resize-none placeholder:text-zinc-600"
                                             placeholder="Describe the properties and dimensions of this category..."
                                         />
+                                        {activeCategoryData.category.description && (
+                                            <Button 
+                                                size="icon" 
+                                                variant="secondary" 
+                                                className="absolute bottom-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 hover:bg-blue-600 hover:text-white"
+                                                onClick={() => insertReference(activeCategoryData.category.description!, 'quote')}
+                                                title="Insert Definition"
+                                            >
+                                                <ArrowLeftCircle size={14} />
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
 
@@ -626,13 +644,51 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                         </h3>
                                         <div className="flex flex-wrap gap-1.5">
                                             {activeCategoryData.childCodes.length > 0 ? activeCategoryData.childCodes.map(c => (
-                                                <React.Fragment key={c.id}>
-                                                    <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-normal">
+                                                <div key={c.id} className="group relative flex items-center">
+                                                    <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-normal pr-6">
                                                         {c.name}
                                                     </Badge>
-                                                </React.Fragment>
+                                                    <button 
+                                                        className="absolute right-1 text-zinc-500 hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        onClick={() => insertReference(c.name, 'link')}
+                                                        title="Insert Code Name"
+                                                    >
+                                                        <ArrowLeftCircle size={12} />
+                                                    </button>
+                                                </div>
                                             )) : (
                                                 <span className="text-zinc-600 text-xs italic">No child codes.</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Evidence (Codings) */}
+                                    <div>
+                                        <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                            <Quote size={12}/> Grounded Evidence
+                                        </h3>
+                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                            {activeCategoryData.relatedCodings.length > 0 ? activeCategoryData.relatedCodings.map(coding => {
+                                                const sourceArtifact = artifacts.find(a => a.id === coding.artifactId);
+                                                return (
+                                                    <div key={coding.id} className="group p-2 bg-zinc-900/30 border border-zinc-800 rounded hover:bg-zinc-900 transition-colors relative">
+                                                        <p className="text-xs text-zinc-300 italic line-clamp-3 mb-1">"{coding.textSnippet}"</p>
+                                                        <div className="flex justify-between items-center text-[9px] text-zinc-600">
+                                                            <span>{sourceArtifact?.name || 'Unknown Source'}</span>
+                                                        </div>
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="ghost" 
+                                                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800"
+                                                            onClick={() => insertReference(`${coding.textSnippet} (${sourceArtifact?.name || 'Source'})`, 'quote')}
+                                                            title="Insert Quote"
+                                                        >
+                                                            <CopyPlus size={14} />
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            }) : (
+                                                <span className="text-zinc-600 text-xs italic">No linked evidence found.</span>
                                             )}
                                         </div>
                                     </div>
@@ -643,10 +699,19 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                                             <StickyNote size={12}/> Related Memos ({activeCategoryData.relatedMemos.length})
                                         </h3>
                                         <div className="space-y-2">
-                                            {activeCategoryData.relatedMemos.length > 0 ? activeCategoryData.relatedMemos.slice(0, 3).map(m => (
-                                                <Card key={m.id} className="bg-zinc-900 border-zinc-800 p-3">
-                                                    <div className="font-semibold text-xs text-zinc-300 mb-1">{m.title}</div>
+                                            {activeCategoryData.relatedMemos.length > 0 ? activeCategoryData.relatedMemos.slice(0, 5).map(m => (
+                                                <Card key={m.id} className="bg-zinc-900 border-zinc-800 p-3 group relative hover:border-zinc-700">
+                                                    <div className="font-semibold text-xs text-zinc-300 mb-1 pr-6">{m.title}</div>
                                                     <div className="text-[10px] text-zinc-500 line-clamp-3">{m.content}</div>
+                                                    <Button 
+                                                        size="icon" 
+                                                        variant="ghost" 
+                                                        className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-blue-400 hover:bg-zinc-800"
+                                                        onClick={() => insertReference(`**Memo: ${m.title}**\n${m.content}`, 'plain')}
+                                                        title="Insert Memo"
+                                                    >
+                                                        <ArrowLeftCircle size={14} />
+                                                    </Button>
                                                 </Card>
                                             )) : (
                                                 <span className="text-zinc-600 text-xs italic">No linked memos.</span>
@@ -658,8 +723,8 @@ export const TheoryBuilder: React.FC<TheoryBuilderProps> = ({
                         ) : (
                             <div className="flex flex-col items-center justify-center h-full text-zinc-600 p-8 text-center gap-2">
                                 <Layout size={32} className="opacity-20" />
-                                <p className="text-sm font-medium">Concept Inspector</p>
-                                <p className="text-xs">Select a category from the directory to view its definition, memos, and grounding evidence.</p>
+                                <p className="text-sm font-medium">Source Material</p>
+                                <p className="text-xs">Select a category from the directory to access definitions, memos, and raw evidence for your narrative.</p>
                             </div>
                         )}
                     </div>

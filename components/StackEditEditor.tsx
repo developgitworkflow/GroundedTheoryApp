@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { 
@@ -9,6 +10,10 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { cn } from '../lib/utils';
 
+export interface StackEditEditorRef {
+    insertText: (text: string) => void;
+}
+
 interface StackEditEditorProps {
     value: string;
     onChange: (value: string) => void;
@@ -16,14 +21,35 @@ interface StackEditEditorProps {
     readOnly?: boolean;
 }
 
-export const StackEditEditor: React.FC<StackEditEditorProps> = ({ 
+export const StackEditEditor = forwardRef<StackEditEditorRef, StackEditEditorProps>(({ 
     value, 
     onChange, 
     className,
     readOnly = false 
-}) => {
+}, ref) => {
     const [viewMode, setViewMode] = useState<'split' | 'edit' | 'preview'>('split');
     const [html, setHtml] = useState('');
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useImperativeHandle(ref, () => ({
+        insertText: (text: string) => {
+            if (textareaRef.current) {
+                const start = textareaRef.current.selectionStart;
+                const end = textareaRef.current.selectionEnd;
+                const newValue = value.substring(0, start) + text + value.substring(end);
+                onChange(newValue);
+                // Restore focus and cursor position after React rerender
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                        textareaRef.current.setSelectionRange(start + text.length, start + text.length);
+                    }
+                }, 0);
+            } else {
+                onChange(value + text);
+            }
+        }
+    }));
 
     useEffect(() => {
         const parseMarkdown = async () => {
@@ -34,8 +60,23 @@ export const StackEditEditor: React.FC<StackEditEditorProps> = ({
     }, [value]);
 
     const insertSyntax = (syntax: string, wrap = '') => {
-        // Simple append for now, ideally would insert at cursor
-        onChange(value + (wrap ? `${syntax}text${wrap}` : syntax));
+        if (textareaRef.current) {
+            const start = textareaRef.current.selectionStart;
+            const end = textareaRef.current.selectionEnd;
+            const selection = value.substring(start, end);
+            const replacement = wrap ? `${syntax}${selection || 'text'}${wrap}` : `${syntax}${selection}`;
+            const newValue = value.substring(0, start) + replacement + value.substring(end);
+            onChange(newValue);
+             setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.focus();
+                    const newCursorPos = start + replacement.length;
+                    textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                }
+            }, 0);
+        } else {
+            onChange(value + (wrap ? `${syntax}text${wrap}` : syntax));
+        }
     };
 
     return (
@@ -91,6 +132,7 @@ export const StackEditEditor: React.FC<StackEditEditorProps> = ({
                     viewMode === 'split' ? "w-1/2 border-r border-zinc-800" : viewMode === 'edit' ? "w-full" : "w-0 hidden"
                 )}>
                     <textarea 
+                        ref={textareaRef}
                         className="w-full h-full bg-zinc-950 p-4 font-mono text-sm text-zinc-300 resize-none focus:outline-none leading-relaxed selection:bg-blue-500/30"
                         value={value}
                         onChange={(e) => onChange(e.target.value)}
@@ -112,7 +154,7 @@ export const StackEditEditor: React.FC<StackEditEditorProps> = ({
             </div>
         </div>
     );
-};
+});
 
 const ToolbarBtn = ({ icon: Icon, onClick, tooltip }: any) => (
     <Button 

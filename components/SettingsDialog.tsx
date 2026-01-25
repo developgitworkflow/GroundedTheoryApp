@@ -513,10 +513,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     label="Theory Approach" 
                 />
                 <NavButton 
-                    active={activeTab === 'resources'} 
-                    onClick={() => setActiveTab('resources')} 
+                    active={activeTab === 'tools'} 
+                    onClick={() => setActiveTab('tools')} 
                     icon={Wrench} 
-                    label="Tools & Refs" 
+                    label="Research Tools" 
+                />
+                <NavButton 
+                    active={activeTab === 'bibliography'} 
+                    onClick={() => setActiveTab('bibliography')} 
+                    icon={Book} 
+                    label="Bibliography" 
                 />
                 <NavButton 
                     active={activeTab === 'findings'} 
@@ -890,6 +896,100 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
                 )}
 
+                {activeTab === 'tools' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-start">
+                            <SectionHeader title="Research Tools" description="Software and instruments used." />
+                            <div className="flex gap-2">
+                                {onConvertToArtifact && (
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            const content = `# Research Tools\n\n${localSettings.theoreticalFramework.tools.map(t => `* ${t.name} v${t.version || 'N/A'} - ${t.referenceURL || 'No URL'}`).join('\n')}`;
+                                            onConvertToArtifact('Research Tools Registry', content, 'Tools');
+                                        }}
+                                        className="gap-2 text-zinc-400 hover:text-white"
+                                    >
+                                        <FileText size={14}/> Save as Artifact
+                                    </Button>
+                                )}
+                                <Button size="xs" variant="outline" onClick={addTool} className="gap-2"><Plus size={14}/> Add Tool</Button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            {localSettings.theoreticalFramework.tools.map(t => (
+                                <div key={t.id} className="flex gap-2 items-center p-2 bg-zinc-900/50 border border-zinc-800 rounded">
+                                    <Wrench size={14} className="text-zinc-500 ml-2" />
+                                    <Input 
+                                        value={t.name}
+                                        onChange={(e) => updateTool(t.id, { name: e.target.value })}
+                                        placeholder="Tool Name"
+                                        className="w-1/3 bg-zinc-950 h-8 text-xs"
+                                    />
+                                    <Input 
+                                        value={t.version}
+                                        onChange={(e) => updateTool(t.id, { version: e.target.value })}
+                                        placeholder="Version"
+                                        className="w-24 bg-zinc-950 h-8 text-xs"
+                                    />
+                                    <Input 
+                                        value={t.referenceURL}
+                                        onChange={(e) => updateTool(t.id, { referenceURL: e.target.value })}
+                                        placeholder="URL"
+                                        className="flex-1 bg-zinc-950 h-8 text-xs"
+                                    />
+                                    <Button size="icon" variant="ghost" onClick={() => removeTool(t.id)} className="h-8 w-8 text-zinc-600 hover:text-red-500">
+                                        <Trash2 size={14} />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'bibliography' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-start">
+                            <SectionHeader title="Bibliography" description="Literature references (BibTeX format supported)." />
+                            <div className="flex gap-2">
+                                {onConvertToArtifact && (
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            const content = `# Bibliography\n\n${localSettings.theoreticalFramework.bibliographyContent}`;
+                                            onConvertToArtifact('Bibliography', content, 'Resources');
+                                        }}
+                                        className="gap-2 text-zinc-400 hover:text-white"
+                                    >
+                                        <FileText size={14}/> Save as Artifact
+                                    </Button>
+                                )}
+                                <Button size="xs" variant="outline" onClick={() => bibFileInputRef.current?.click()} className="gap-2">
+                                    <Upload size={14}/> Import .bib
+                                </Button>
+                                <Button size="xs" variant="outline" onClick={handleBibExport} className="gap-2">
+                                    <Download size={14}/> Export .bib
+                                </Button>
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-3 items-start">
+                            <Book size={20} className="text-zinc-500 mt-2" />
+                            <Textarea 
+                                value={localSettings.theoreticalFramework.bibliographyContent}
+                                onChange={(e) => setLocalSettings({
+                                    ...localSettings, 
+                                    theoreticalFramework: { ...localSettings.theoreticalFramework, bibliographyContent: e.target.value }
+                                })}
+                                className="min-h-[200px] font-mono text-sm bg-zinc-900"
+                                placeholder="Paste BibTeX entries here or import a .bib file..."
+                            />
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'findings' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
@@ -1029,91 +1129,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                 />
                              </div>
                          </div>
-                    </div>
-                )}
-
-                {activeTab === 'resources' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                        {/* Tools */}
-                        <div>
-                             <div className="flex justify-between items-start mb-4">
-                                <SectionHeader title="Research Tools" description="Software and instruments used." />
-                                <div className="flex gap-2">
-                                    {onConvertToArtifact && (
-                                        <Button 
-                                            size="xs" 
-                                            variant="outline" 
-                                            onClick={() => {
-                                                const content = `# Research Resources\n\n## Tools\n${localSettings.theoreticalFramework.tools.map(t => `* ${t.name} v${t.version || 'N/A'} - ${t.referenceURL || 'No URL'}`).join('\n')}\n\n## Bibliography\n${localSettings.theoreticalFramework.bibliographyContent}`;
-                                                onConvertToArtifact('Resources & Bibliography', content, 'Resources');
-                                            }}
-                                            className="gap-2 text-zinc-400 hover:text-white"
-                                        >
-                                            <FileText size={14}/> Save as Artifact
-                                        </Button>
-                                    )}
-                                    <Button size="xs" variant="outline" onClick={addTool} className="gap-2"><Plus size={14}/> Add Tool</Button>
-                                </div>
-                             </div>
-                             <div className="space-y-2">
-                                {localSettings.theoreticalFramework.tools.map(t => (
-                                    <div key={t.id} className="flex gap-2 items-center p-2 bg-zinc-900/50 border border-zinc-800 rounded">
-                                        <Wrench size={14} className="text-zinc-500 ml-2" />
-                                        <Input 
-                                            value={t.name}
-                                            onChange={(e) => updateTool(t.id, { name: e.target.value })}
-                                            placeholder="Tool Name"
-                                            className="w-1/3 bg-zinc-950 h-8 text-xs"
-                                        />
-                                        <Input 
-                                            value={t.version}
-                                            onChange={(e) => updateTool(t.id, { version: e.target.value })}
-                                            placeholder="Version"
-                                            className="w-24 bg-zinc-950 h-8 text-xs"
-                                        />
-                                        <Input 
-                                            value={t.referenceURL}
-                                            onChange={(e) => updateTool(t.id, { referenceURL: e.target.value })}
-                                            placeholder="URL"
-                                            className="flex-1 bg-zinc-950 h-8 text-xs"
-                                        />
-                                        <Button size="icon" variant="ghost" onClick={() => removeTool(t.id)} className="h-8 w-8 text-zinc-600 hover:text-red-500">
-                                            <Trash2 size={14} />
-                                        </Button>
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
-
-                        <div className="h-px bg-zinc-800" />
-
-                        {/* Bibliography */}
-                        <div>
-                            <div className="flex justify-between items-start mb-4">
-                                <SectionHeader title="Bibliography" description="Literature references (BibTeX format supported)." />
-                                <div className="flex gap-2">
-                                    <Button size="xs" variant="outline" onClick={() => bibFileInputRef.current?.click()} className="gap-2">
-                                        <Upload size={14}/> Import .bib
-                                    </Button>
-                                    <Button size="xs" variant="outline" onClick={handleBibExport} className="gap-2">
-                                        <Download size={14}/> Export .bib
-                                    </Button>
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-3 items-start">
-                                <Book size={20} className="text-zinc-500 mt-2" />
-                                <Textarea 
-                                    value={localSettings.theoreticalFramework.bibliographyContent}
-                                    onChange={(e) => setLocalSettings({
-                                        ...localSettings, 
-                                        theoreticalFramework: { ...localSettings.theoreticalFramework, bibliographyContent: e.target.value }
-                                    })}
-                                    className="min-h-[200px] font-mono text-sm bg-zinc-900"
-                                    placeholder="Paste BibTeX entries here or import a .bib file..."
-                                />
-                            </div>
-                        </div>
                     </div>
                 )}
 
