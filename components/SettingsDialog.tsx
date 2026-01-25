@@ -871,7 +871,22 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
                              <SectionHeader title="Emergent Findings" description="Key insights and theoretical propositions." />
-                             <Button size="xs" variant="brand" onClick={addFinding} className="gap-2"><Plus size={14}/> Add Finding</Button>
+                             <div className="flex gap-2">
+                                {onConvertToArtifact && (
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            const content = `# Emergent Findings\n\n${findings.map((f, i) => `## ${i+1}. ${f.title}\n\n${f.content}\n`).join('\n')}`;
+                                            onConvertToArtifact('Emergent Findings', content, 'Findings');
+                                        }}
+                                        className="gap-2 text-zinc-400 hover:text-white"
+                                    >
+                                        <FileText size={14}/> Save as Artifact
+                                    </Button>
+                                )}
+                                <Button size="xs" variant="brand" onClick={addFinding} className="gap-2"><Plus size={14}/> Add Finding</Button>
+                             </div>
                         </div>
                         
                         <div className="space-y-4">
