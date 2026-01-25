@@ -408,6 +408,7 @@ const DeckCategoryCard: React.FC<{ category: Code } & OntologyDeckProps> = (prop
                 <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
+                            <Folder size={14} style={{ color: category.color }} className="shrink-0" />
                             <h4 
                                 className={cn(
                                     "text-sm font-bold truncate cursor-pointer hover:underline",
@@ -619,6 +620,8 @@ const TreeItem: React.FC<TreeItemProps> = (props) => {
                 
                 <div className="w-2 h-2 rounded-full mx-1 shrink-0" style={{ backgroundColor: code.color }} />
                 
+                {code.kind === 'category' ? <Folder size={14} className="text-amber-500/80 mr-1" /> : <Tag size={14} style={{ color: code.color }} className="mr-1" />}
+
                 <span className="text-sm truncate flex-1">{code.name}</span>
                 
                 <span className="text-[10px] text-zinc-500 font-mono px-1">{usageCount > 0 ? usageCount : ''}</span>
@@ -711,7 +714,11 @@ const OntologyTable: React.FC<OntologyTableProps> = ({ codes, codings, searchTer
                             <tr key={code.id} className="hover:bg-zinc-800/30 transition-colors group">
                                 <td className="p-3">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
+                                        {code.kind === 'category' ? (
+                                            <Folder size={14} style={{ color: code.color }} className="shrink-0" />
+                                        ) : (
+                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
+                                        )}
                                         <span className="text-zinc-200 font-medium">{code.name}</span>
                                     </div>
                                 </td>
