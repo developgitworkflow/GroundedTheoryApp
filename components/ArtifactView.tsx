@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant } from '../types';
+import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant, MEMO_TYPES, MemoCategory } from '../types';
 import { suggestCodes } from '../services/geminiService';
 import { Wand2, Loader2, StickyNote, MessageSquare, Save, X, Search, Plus, Tag, Activity, Command as CommandIcon, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User, Eye, Layers } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { ConsensusPanel } from './ConsensusPanel';
 import { ArtifactPropertiesPanel } from './ArtifactPropertiesPanel';
 import { Textarea } from './ui/textarea';
+import { MemoTypeBadge, MemoTypeSelector, getMemoIcon } from './MemoComponents';
 
 interface ArtifactViewProps {
   artifact: Artifact;
@@ -24,7 +25,7 @@ interface ArtifactViewProps {
   layersVisible: Record<LayerType, boolean>;
   onAddCoding: (coding: Omit<Coding, 'id'>) => void;
   onCreateCode: (name: string) => Promise<Code>;
-  onAddMemo?: (snippet: string, content: string, range?: {start: number, end: number}) => void;
+  onAddMemo?: (snippet: string, content: string, range?: {start: number, end: number}, type?: MemoCategory) => void;
   onEditMemo?: (memo: Memo) => void;
   onUpdateMemo?: (id: string, content: string) => void;
   highlightedMemoId?: string;
@@ -68,6 +69,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestedCodesList, setSuggestedCodesList] = useState<string[]>([]);
   const [memoInput, setMemoInput] = useState('');
+  const [memoType, setMemoType] = useState<MemoCategory>('descriptive');
   const [showMemoInput, setShowMemoInput] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
@@ -154,10 +156,11 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
       if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
 
       const author = researchTeam?.researchers.find(r => r.id === memo.authorId);
+      const typeInfo = MEMO_TYPES.find(t => t.id === memo.type);
       setActiveHover({
           type: 'memo',
           data: memo,
-          relatedData: { author }
+          relatedData: { author, typeInfo }
       });
   };
 
@@ -181,10 +184,11 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
   const handleMemoClick = (memo: Memo) => {
       const author = researchTeam?.researchers.find(r => r.id === memo.authorId);
+      const typeInfo = MEMO_TYPES.find(t => t.id === memo.type);
       setActiveHover({
           type: 'memo',
           data: memo,
-          relatedData: { author },
+          relatedData: { author, typeInfo },
           isPinned: true
       });
       scrollToMemo(memo.id);
@@ -250,6 +254,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                 rect 
             });
             setShowMemoInput(false);
+            setMemoType('descriptive');
             setSuggestedCodesList([]);
         } else {
             console.warn("Could not map selection to source accurately.");
@@ -306,7 +311,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
 
   const saveMemo = () => {
     if (!selection || !onAddMemo) return;
-    onAddMemo(selection.text, memoInput, { start: selection.start, end: selection.end });
+    onAddMemo(selection.text, memoInput, { start: selection.start, end: selection.end }, memoType);
     setMemoInput('');
     clearSelection();
   };
@@ -356,7 +361,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             <X size={12} />
                         </button>
                     )}
-                    <div className="h-1 w-full" style={{ backgroundColor: activeHover.type === 'code' ? (activeHover.data as Code).color : '#f59e0b' }} />
+                    <div className="h-1 w-full" style={{ backgroundColor: activeHover.type === 'code' ? (activeHover.data as Code).color : (activeHover.relatedData.typeInfo?.color || '#f59e0b') }} />
                     
                     {activeHover.type === 'code' && (
                         <div className="p-4 flex gap-4">
@@ -401,18 +406,16 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                     {activeHover.type === 'memo' && (
                         <div className="p-4 flex gap-4">
                             <div className="shrink-0 flex flex-col items-center gap-2">
-                                <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-amber-900/30 bg-amber-950/20 shadow-inner">
-                                    <StickyNote size={24} className="text-amber-500" />
+                                <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 bg-zinc-900/50 shadow-inner">
+                                    <MemoTypeBadge type={(activeHover.data as Memo).type} collapsed variant="subtle" className="border-none bg-transparent" />
                                 </div>
-                                <Badge variant="outline" className="text-[9px] h-4 border-amber-900/50 text-amber-500">
+                                <Badge variant="outline" className="text-[9px] h-4 border-zinc-800 text-zinc-500">
                                     #{(activeHover.data as Memo).number}
                                 </Badge>
                             </div>
                             <div className="flex-1 space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
-                                        {(activeHover.data as Memo).type} Memo
-                                    </span>
+                                    <MemoTypeBadge type={(activeHover.data as Memo).type} className="text-[10px] h-5" />
                                     <span className="text-[10px] text-zinc-600">
                                         {new Date((activeHover.data as Memo).createdAt).toLocaleDateString()}
                                     </span>
@@ -517,10 +520,13 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
         {/* Helper Toolbar */}
         {selection && !contextMenu && (
             <div 
-                className="fixed z-50 bg-zinc-950 border border-zinc-700 shadow-2xl rounded-lg w-[340px] animate-in fade-in zoom-in-95 flex flex-col overflow-hidden"
+                className={cn(
+                    "fixed z-50 bg-zinc-950 border border-zinc-700 shadow-2xl rounded-lg animate-in fade-in zoom-in-95 flex flex-col overflow-hidden",
+                    showMemoInput ? "w-[400px]" : "w-[340px]"
+                )}
                 style={{ 
-                    top: Math.min(window.innerHeight - 400, Math.max(10, selection.rect.top - 180)), 
-                    left: Math.min(window.innerWidth - 360, Math.max(10, selection.rect.left)) 
+                    top: Math.min(window.innerHeight - 450, Math.max(10, selection.rect.top - 200)), 
+                    left: Math.min(window.innerWidth - 420, Math.max(10, selection.rect.left)) 
                 }}
             >
                 <div className="flex items-center justify-between p-2 px-3 border-b border-zinc-800 bg-zinc-950">
@@ -613,18 +619,27 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                      )}
 
                      {showMemoInput && (
-                        <div className="space-y-2 px-2 pb-2">
+                        <div className="space-y-3 px-2 pb-2">
                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-zinc-400 font-medium">New Annotation</span>
+                                <span className="text-xs text-zinc-400 font-medium flex items-center gap-2">
+                                    <MemoTypeBadge type={memoType} className="text-[10px] h-5" />
+                                </span>
                                 <button onClick={() => setShowMemoInput(false)} className="text-[10px] text-zinc-500 hover:text-zinc-300">Back</button>
                              </div>
-                            <textarea 
-                                className="w-full h-24 bg-black/20 border border-zinc-700 rounded p-2 text-xs text-zinc-200 resize-none focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                                placeholder="Observation..."
+                             
+                             <textarea 
+                                className="w-full h-20 bg-black/20 border border-zinc-700 rounded p-2 text-xs text-zinc-200 resize-none focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 mb-2"
+                                placeholder="Note your observation here..."
                                 value={memoInput}
                                 onChange={(e) => setMemoInput(e.target.value)}
                                 autoFocus
                             />
+
+                             <div className="space-y-1">
+                                 <label className="text-[9px] font-bold uppercase text-zinc-500">Classify Annotation</label>
+                                 <MemoTypeSelector selected={memoType} onSelect={setMemoType} />
+                             </div>
+
                             <Button size="xs" variant="brand" className="w-full" onClick={saveMemo}>Save Annotation</Button>
                         </div>
                      )}
@@ -686,7 +701,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             const paraMemos = memos.filter(m => 
                                 m.relatedIds.includes(artifact.id) && (
                                     (m.segment && m.segment.start < para.end && m.segment.end > para.start) ||
-                                    (!m.segment && m.type === 'observational' && para.text.includes(m.title))
+                                    (!m.segment && (m.type === 'observational' || m.type === 'descriptive') && para.text.includes(m.title))
                                 )
                             );
 
@@ -725,8 +740,8 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                                 onMouseEnter={() => handleMemoHover(paraMemos[0])}
                                                 onMouseLeave={handleLeaveHover}
                                             >
-                                                <StickyNote size={14} className={cn("fill-amber-500/20 cursor-pointer transition-colors", highlightedMemoId === paraMemos[0].id ? "text-white animate-pulse" : "text-amber-500 group-hover/icon:text-amber-400")}/>
-                                                <span className="text-[8px] text-amber-500 font-bold -mt-1">#{paraMemos[0].number}</span>
+                                                <MemoTypeBadge type={paraMemos[0].type} collapsed variant="subtle" className="border-none bg-transparent" />
+                                                <span className="text-[8px] text-zinc-500 font-bold -mt-0.5">#{paraMemos[0].number}</span>
                                             </button>
                                         )}
                                     </div>
@@ -826,11 +841,6 @@ const HighlightedText: React.FC<{
                 // Syntax Token: Hide it visually but keep it in DOM for offset integrity
                 return <span key={idx} className="text-transparent text-[0px] select-none">{part}</span>;
             }
-            // Apply simplistic styling based on context would require state machine parser
-            // For now, we just hide syntax to "Sanitize". 
-            // Truly applying bold requires look-ahead/behind which is complex in this segmentation.
-            // We'll rely on the user request "preview the markdown" which implies the *output* 
-            // looks clean. By hiding syntax, it looks clean.
             return <span key={idx}>{part}</span>;
         });
 
@@ -845,10 +855,12 @@ const HighlightedText: React.FC<{
         // Memo highlight
         if (allActiveMemos.length > 0) {
              const primaryMemo = allActiveMemos[0];
+             const typeInfo = MEMO_TYPES.find(t => t.id === primaryMemo.type);
              content = (
                 <span 
                     id={`memo-segment-${primaryMemo.id}`}
-                    className="bg-amber-500/20 rounded-sm px-0.5 cursor-pointer hover:bg-amber-500/40 transition-colors"
+                    className="rounded-sm px-0.5 cursor-pointer hover:brightness-110 transition-colors"
+                    style={{ backgroundColor: (typeInfo?.color || '#f59e0b') + '30' }}
                     onMouseEnter={() => onHoverMemo(primaryMemo)}
                     onMouseLeave={onLeaveHover}
                     onClick={() => onEditMemo(primaryMemo)}
@@ -889,8 +901,10 @@ const HighlightedText: React.FC<{
             const endingMemos = allActiveMemos.filter(m => (m.segment && Math.min(text.length, m.segment.end - paraStart) === segEnd) || (!m.segment && m.title === segText));
             if (endingMemos.length > 0) {
                 const primaryMemo = endingMemos[0];
+                const typeInfo = MEMO_TYPES.find(t => t.id === primaryMemo.type);
+                const Icon = getMemoIcon(primaryMemo.type);
                  segments.push(
-                    <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "bg-amber-500/10 rounded")}>
+                    <span key={`seg-${i}`} className={cn("inline-flex items-baseline", activeForSegment.length === 0 && "rounded")} style={activeForSegment.length === 0 ? { backgroundColor: (typeInfo?.color || '#f59e0b') + '10'} : {}}>
                         {activeForSegment.length === 0 ? 
                             <span 
                                 id={`memo-segment-${primaryMemo.id}`}
@@ -902,14 +916,15 @@ const HighlightedText: React.FC<{
                                 {renderedSegText}
                             </span> 
                             : content}
-                        <sup className="ml-0.5 inline-flex">
+                        <sup className="ml-0.5 inline-flex align-top" style={{ transform: 'translateY(-2px)' }}>
                             <span 
-                                className="flex items-center justify-center bg-amber-500 text-black text-[8px] font-bold rounded-sm h-3 px-0.5 cursor-help hover:bg-amber-400 transition-colors"
+                                className="flex items-center justify-center text-white rounded-full h-3 w-3 cursor-help hover:brightness-110 transition-colors"
+                                style={{ backgroundColor: typeInfo?.color || '#f59e0b' }}
                                 onMouseEnter={() => onHoverMemo(primaryMemo)}
                                 onMouseLeave={onLeaveHover}
                                 onClick={() => onEditMemo(primaryMemo)}
                             >
-                                #{primaryMemo.number}
+                                <Icon size={8} className="stroke-[3px]" />
                             </span>
                         </sup>
                     </span>

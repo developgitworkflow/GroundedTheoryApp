@@ -11,7 +11,7 @@ import { Visualizations } from './components/Visualizations';
 import { ReportView } from './components/ReportView';
 import { OntologyManager } from './components/OntologyManager'; 
 import { suggestOntology } from './services/geminiService'; 
-import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher, Vote, VoteStatus } from './types';
+import { Artifact, Code, Coding, LayerConfig, LayerType, Memo, JournalEntry, ProjectSettings, Theory, ResearchTeam, Researcher, Vote, VoteStatus, MemoCategory } from './types';
 import { 
   BrainCircuit,
   BookMarked,
@@ -625,20 +625,20 @@ export default function App() {
                                         layersVisible={layersVisible}
                                         onAddCoding={handleAddCoding}
                                         onCreateCode={(name) => handleCreateCode(name, 'code')}
-                                        onAddMemo={(snippet, content, range) => {
+                                        onAddMemo={(snippet, content, range, type) => {
                                             const newMemo: Memo = {
                                                 id: `memo-${Date.now()}`,
                                                 title: snippet.substring(0, 20) + '...',
                                                 content,
                                                 relatedIds: [activeArtifact.id],
                                                 createdAt: new Date().toISOString(),
-                                                type: 'observational',
+                                                type: type || 'descriptive' as any, // Default to descriptive if not provided
                                                 number: memos.length + 1,
                                                 authorId: activeResearcherId,
                                                 segment: { start: range!.start, end: range!.end, text: snippet }
                                             };
                                             setMemos([...memos, newMemo]);
-                                            addJournalEntry(`Created annotation on ${activeArtifact.name}: "${content.substring(0, 20)}..."`, 'auto');
+                                            addJournalEntry(`Created ${type || 'descriptive'} annotation on ${activeArtifact.name}: "${content.substring(0, 20)}..."`, 'auto');
                                         }}
                                         onEditMemo={(memo) => {
                                             // Handle edit memo (simple prompt for now or open dialog)

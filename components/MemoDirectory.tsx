@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Memo, Artifact } from '../types';
+import { Memo, Artifact, MEMO_TYPES, MemoCategory } from '../types';
 import { StickyNote, Book, Lightbulb, Search, Calendar, FileText, Filter } from 'lucide-react';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
+import { MemoTypeBadge, getMemoIcon } from './MemoComponents';
 
 interface MemoDirectoryProps {
   memos: Memo[];
@@ -14,7 +15,7 @@ interface MemoDirectoryProps {
 
 export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, onSelectMemo }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'observational' | 'theoretical'>('all');
+  const [filterType, setFilterType] = useState<string>('all');
 
   const filteredMemos = useMemo(() => {
     return memos.filter(memo => {
@@ -30,12 +31,8 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
     return art ? art.name : 'Unknown Source';
   };
 
-  const getIcon = (type: Memo['type']) => {
-    switch(type) {
-      case 'theoretical': return <Lightbulb size={14} className="text-purple-400" />;
-      case 'procedural': return <Book size={14} className="text-blue-400" />;
-      default: return <StickyNote size={14} className="text-amber-400" />;
-    }
+  const getMemoTypeInfo = (type: string) => {
+      return MEMO_TYPES.find(t => t.id === type);
   };
 
   return (
@@ -59,32 +56,16 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
-            <div className="flex gap-2">
-                <Button 
-                    variant={filterType === 'all' ? "secondary" : "outline"} 
-                    size="xs" 
-                    onClick={() => setFilterType('all')}
-                    className="flex-1"
-                >
-                    All
-                </Button>
-                <Button 
-                    variant={filterType === 'observational' ? "secondary" : "outline"} 
-                    size="xs" 
-                    onClick={() => setFilterType('observational')}
-                    className="flex-1"
-                >
-                    Obs
-                </Button>
-                <Button 
-                    variant={filterType === 'theoretical' ? "secondary" : "outline"} 
-                    size="xs" 
-                    onClick={() => setFilterType('theoretical')}
-                    className="flex-1"
-                >
-                    Theory
-                </Button>
-            </div>
+            <select 
+                className="w-full h-8 bg-zinc-950 border border-zinc-800 rounded text-xs px-2 text-zinc-300 focus:outline-none"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+            >
+                <option value="all">All Types</option>
+                {MEMO_TYPES.map(t => (
+                    <option key={t.id} value={t.id}>[{t.symbol}] {t.label}</option>
+                ))}
+            </select>
         </div>
 
         {/* List */}
@@ -95,34 +76,42 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
                 </div>
             )}
             
-            {filteredMemos.map(memo => (
-                <div 
-                    key={memo.id}
-                    onClick={() => onSelectMemo(memo)}
-                    className="group bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-3 hover:bg-zinc-800 hover:border-zinc-700 cursor-pointer transition-all shadow-sm"
-                >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-2">
-                            {getIcon(memo.type)}
-                            <span className="font-semibold text-xs text-zinc-200 line-clamp-1">{memo.title}</span>
+            {filteredMemos.map(memo => {
+                const typeInfo = getMemoTypeInfo(memo.type);
+                return (
+                    <div 
+                        key={memo.id}
+                        onClick={() => onSelectMemo(memo)}
+                        className="group bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-3 hover:bg-zinc-800 hover:border-zinc-700 cursor-pointer transition-all shadow-sm relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: typeInfo?.color || '#3f3f46' }} />
+                        <div className="flex items-start justify-between gap-2 mb-2 pl-2">
+                            <MemoTypeBadge type={memo.type} className="text-[9px] h-5" />
+                            <span className="text-[9px] text-zinc-600 font-mono shrink-0">
+                                #{memo.number}
+                            </span>
                         </div>
-                        <Badge variant="outline" className="text-[9px] px-1 h-4 border-zinc-800 text-zinc-500 shrink-0">
-                            {new Date(memo.createdAt).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit'})}
-                        </Badge>
-                    </div>
 
-                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-2">
-                        {memo.content}
-                    </p>
+                        <div className="pl-2 mb-2">
+                             <span className="font-semibold text-xs text-zinc-200 line-clamp-1">{memo.title}</span>
+                        </div>
 
-                    <div className="flex items-center gap-1.5 pt-2 border-t border-zinc-800/50">
-                        <FileText size={10} className="text-zinc-600" />
-                        <span className="text-[10px] text-zinc-500 truncate max-w-[180px]">
-                            {memo.relatedIds.length > 0 ? getArtifactName(memo.relatedIds[0]) : 'General Project'}
-                        </span>
+                        <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-2 pl-2">
+                            {memo.content}
+                        </p>
+
+                        <div className="flex items-center gap-1.5 pt-2 border-t border-zinc-800/50 pl-2">
+                            <FileText size={10} className="text-zinc-600" />
+                            <span className="text-[10px] text-zinc-500 truncate max-w-[180px]">
+                                {memo.relatedIds.length > 0 ? getArtifactName(memo.relatedIds[0]) : 'General Project'}
+                            </span>
+                            <span className="ml-auto text-[9px] text-zinc-600">
+                                {new Date(memo.createdAt).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit'})}
+                            </span>
+                        </div>
                     </div>
-                </div>
-            ))}
+                )
+            })}
         </div>
     </div>
   );

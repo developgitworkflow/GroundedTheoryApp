@@ -166,13 +166,32 @@ export interface Coding {
   researcherId?: string; 
 }
 
+// MEMO TYPES DEFINITION
+export const MEMO_TYPES = [
+  { symbol: 'T', id: 'theoretical', label: 'Theoretical', purpose: 'Deep reflections on possible theories emerging from the data.', color: '#8b5cf6' },
+  { symbol: 'M', id: 'methodological', label: 'Methodological', purpose: 'Notes on why you chose a specific path, sample, or tool.', color: '#64748b' },
+  { symbol: 'I', id: 'integrative', label: 'Integrative', purpose: 'The "big picture" memos that connect major concepts together.', color: '#ec4899' },
+  { symbol: 'C', id: 'concept', label: 'Code/Concept', purpose: 'Definitions and boundaries for specific codes you’ve created.', color: '#3b82f6' },
+  { symbol: 'O', id: 'operational', label: 'Operational', purpose: 'Logistics: reminders to "interview X" or "re-read Y".', color: '#f59e0b' },
+  { symbol: 'L', id: 'literature', label: 'Literature', purpose: 'How your findings compare or contrast with existing studies.', color: '#10b981' },
+  { symbol: 'D', id: 'descriptive', label: 'Descriptive', purpose: 'Pure observation without heavy interpretation; the "what" of a scene.', color: '#ef4444' },
+  { symbol: 'A', id: 'analytical', label: 'Analytical', purpose: 'Moving from description to "why" and "how".', color: '#f97316' },
+  { symbol: 'S', id: 'reflective', label: 'Self-Reflective', purpose: 'Tracking your own biases, feelings, and influence on the research.', color: '#a855f7' },
+  { symbol: 'P', id: 'propositional', label: 'Propositional', purpose: 'Making "if/then" statements about how categories relate.', color: '#14b8a6' },
+  { symbol: 'Q', id: 'question', label: 'Question', purpose: 'Unresolved thoughts or holes in the data that need more digging.', color: '#eab308' },
+  { symbol: 'E', id: 'example', label: 'Example/Extract', purpose: 'Highlighting a specific "golden quote" or raw data snippet.', color: '#6366f1' },
+] as const;
+
+export type MemoCategory = typeof MEMO_TYPES[number]['id'];
+
 export interface Memo {
   id: string;
   title: string;
   content: string;
   relatedIds: string[]; // Can relate to Artifact, Code, or Coding
   createdAt: string;
-  type: 'theoretical' | 'procedural' | 'observational' | 'finding'; // Added 'finding'
+  // Type includes the new categories plus legacy 'finding' used in dashboards
+  type: MemoCategory | 'finding' | 'observational' | 'procedural'; 
   number: number; // Added sequence number for reference
   authorId?: string; // Track author
   segment?: {
