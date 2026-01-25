@@ -13,13 +13,16 @@ import {
   Edit2, 
   Trash2, 
   FolderOpen,
+  Folder,
   Tag,
   Move,
   CornerDownRight,
   BookType,
   LayoutGrid,
   Box,
-  Layers
+  Layers,
+  MoreVertical,
+  X
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -322,7 +325,7 @@ const OntologyDeck: React.FC<OntologyDeckProps> = (props) => {
             <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-                        <Box size={14} className="text-amber-500" /> Categories ({categories.length})
+                        <Folder size={14} className="text-amber-500" /> Categories ({categories.length})
                     </h3>
                     <Button variant="ghost" size="xs" onClick={() => onCreateCode(undefined, 'category')} className="h-6 text-zinc-500 hover:text-amber-500">
                         <Plus size={12} className="mr-1" /> Add
@@ -392,7 +395,7 @@ const DeckCategoryCard: React.FC<{ category: Code } & OntologyDeckProps> = (prop
     return (
         <Card 
             className={cn(
-                "bg-zinc-900 border-zinc-800 shadow-sm transition-all",
+                "bg-zinc-900 border-zinc-800 shadow-sm transition-all group",
                 isDragOver ? "ring-2 ring-amber-500/50 bg-zinc-800" : "hover:border-zinc-700"
             )}
             onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -419,19 +422,30 @@ const DeckCategoryCard: React.FC<{ category: Code } & OntologyDeckProps> = (prop
                         {category.description && <p className="text-[10px] text-zinc-500 line-clamp-1 mt-0.5">{category.description}</p>}
                     </div>
                     
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300">
-                                <MoreHorizontal size={14} />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800">
-                            <DropdownMenuItem onClick={() => onEditCode(category)}>Edit Category</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => props.onCreateCode(category.id, 'code')}>Add Child Code</DropdownMenuItem>
-                            <DropdownMenuSeparator className="bg-zinc-800"/>
-                            <DropdownMenuItem onClick={() => onDeleteCode(category.id)} className="text-red-500">Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-1">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-zinc-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => onDeleteCode(category.id)}
+                            title="Delete Category"
+                        >
+                            <Trash2 size={14} />
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-500 hover:text-zinc-300">
+                                    <MoreHorizontal size={14} />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800">
+                                <DropdownMenuItem onClick={() => onEditCode(category)}>Edit Category</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => props.onCreateCode(category.id, 'code')}>Add Child Code</DropdownMenuItem>
+                                <DropdownMenuSeparator className="bg-zinc-800"/>
+                                <DropdownMenuItem onClick={() => onDeleteCode(category.id)} className="text-red-500">Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
                 {/* Children Container */}
@@ -469,43 +483,61 @@ const DeckCodeItem: React.FC<{ code: Code; isChild?: boolean } & OntologyDeckPro
     };
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <div 
-                    draggable
-                    onDragStart={handleDragStart}
-                    className={cn(
-                        "group flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded border cursor-pointer select-none transition-all active:cursor-grabbing max-w-full",
-                        selectedCodeId === code.id 
-                            ? "bg-blue-900/30 border-blue-500 text-blue-200" 
-                            : isChild 
-                                ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-600" 
-                                : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                    )}
+        <div 
+            className={cn(
+                "group flex items-center gap-1 rounded border select-none transition-all max-w-full overflow-hidden",
+                selectedCodeId === code.id 
+                    ? "bg-blue-900/30 border-blue-500 text-blue-200" 
+                    : isChild 
+                        ? "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-600" 
+                        : "bg-zinc-900 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            )}
+        >
+            {/* Clickable Area */}
+            <div 
+                draggable
+                onDragStart={handleDragStart}
+                className="flex items-center gap-1.5 pl-2 py-1 cursor-pointer active:cursor-grabbing hover:brightness-110 flex-1 min-w-0"
+                onClick={() => onNodeClick(code.id)}
+            >
+                <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
+                <span className="text-xs truncate">{code.name}</span>
+                <span className="text-[9px] text-zinc-500 font-mono ml-0.5">{usageCount}</span>
+            </div>
+
+            {/* Hover Actions */}
+            <div className="flex items-center pr-1 opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <button className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300">
+                            <MoreVertical size={10} />
+                        </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="bg-zinc-950 border-zinc-800 z-50">
+                        <DropdownMenuLabel className="text-xs text-zinc-500">{code.name}</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => onEditCode(code)}>Edit</DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-zinc-800"/>
+                        <DropdownMenuItem onClick={() => onDeleteCode(code.id)} className="text-red-500">Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+                
+                <button 
                     onClick={(e) => {
-                        // Prevent menu trigger on simple click if we want selection logic
-                        // But context menu is better for actions.
-                        // We'll use right click for menu in a real app, but here left click selects, long press or specific button for menu?
-                        // Using Trigger asChild wraps this div. 
-                        onNodeClick(code.id);
+                        e.stopPropagation();
+                        onDeleteCode(code.id);
                     }}
+                    className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-red-400"
+                    title="Delete"
                 >
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
-                    <span className="text-xs truncate max-w-[120px]">{code.name}</span>
-                    <span className="text-[9px] text-zinc-500 font-mono ml-1">{usageCount}</span>
-                </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="bg-zinc-950 border-zinc-800 z-50">
-                <DropdownMenuLabel className="text-xs text-zinc-500">{code.name}</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => onEditCode(code)}>Edit</DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-zinc-800"/>
-                <DropdownMenuItem onClick={() => onDeleteCode(code.id)} className="text-red-500">Delete</DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+                    <X size={10} />
+                </button>
+            </div>
+        </div>
     );
 };
 
-// ... TreeItem and OntologyTable components remain same as previous version ...
+// --- TREE VIEW COMPONENT ---
+
 interface TreeItemProps {
     code: Code;
     allCodes: Code[];
@@ -521,31 +553,30 @@ interface TreeItemProps {
     onCreateChild: (parentId: string) => void;
 }
 
-const TreeItem: React.FC<TreeItemProps> = ({ 
-    code, allCodes, codings, depth, searchTerm, selectedCodeId, 
-    onNodeClick, onUpdateCode, onCodeDrop, onDeleteCode, onEditCode, onCreateChild
-}) => {
-    const children = allCodes.filter(c => c.parentId === code.id);
-    const [isOpen, setIsOpen] = useState(true);
+const TreeItem: React.FC<TreeItemProps> = (props) => {
+    const { code, allCodes, codings, depth, searchTerm, selectedCodeId, onNodeClick, onCodeDrop, onDeleteCode, onEditCode, onCreateChild } = props;
+    const [isExpanded, setIsExpanded] = useState(true);
     const [isDragOver, setIsDragOver] = useState(false);
-    
+
+    const children = allCodes.filter(c => c.parentId === code.id);
     const usageCount = codings.filter(c => c.codeId === code.id).length;
-    const isCategory = code.kind === 'category';
+    
+    // Filter logic for tree: show if name matches OR if children match
+    const hasMatch = code.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const childHasMatch = children.some(child => child.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                        allCodes.filter(gc => gc.parentId === child.id).some(gc => gc.name.toLowerCase().includes(searchTerm.toLowerCase())));
+    
+    if (searchTerm && !hasMatch && !childHasMatch) return null;
 
-    const matches = code.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const hasMatchingChildren = children.some(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    // --- DnD Handlers ---
     const handleDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData('text/plain', code.id);
-        e.dataTransfer.effectAllowed = 'move';
         e.stopPropagation();
     };
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        if (!isDragOver) setIsDragOver(true);
+        setIsDragOver(true);
     };
 
     const handleDragLeave = (e: React.DragEvent) => {
@@ -558,119 +589,97 @@ const TreeItem: React.FC<TreeItemProps> = ({
         e.preventDefault();
         e.stopPropagation();
         setIsDragOver(false);
-
-        const draggedId = e.dataTransfer.getData('text/plain');
-        if (draggedId === code.id) return;
-
-        // Delegate to global handler for disambiguation
-        onCodeDrop(draggedId, code.id);
-        
-        if(!isOpen) setIsOpen(true); 
+        const sourceId = e.dataTransfer.getData('text/plain');
+        if (sourceId && sourceId !== code.id) {
+            onCodeDrop(sourceId, code.id);
+        }
     };
 
-    if (searchTerm && !matches && !hasMatchingChildren) return null;
-
     return (
-        <div className="select-none text-sm">
-             <div 
+        <div style={{ marginLeft: depth * 12 }}>
+            <div 
                 className={cn(
-                    "group flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-all border border-transparent relative",
-                    selectedCodeId === code.id ? "bg-blue-900/20 border-blue-900/50" : "hover:bg-zinc-800/80",
-                    isDragOver ? "bg-zinc-800 ring-1 ring-blue-500/50 z-10 shadow-lg" : ""
+                    "flex items-center gap-1 p-1 rounded group transition-all select-none",
+                    selectedCodeId === code.id ? "bg-blue-900/30 text-blue-200" : "hover:bg-zinc-800 text-zinc-300",
+                    isDragOver && "bg-zinc-700 ring-1 ring-blue-500"
                 )}
-                style={{ marginLeft: `${depth * 12}px` }}
-                onClick={() => onNodeClick(code.id)}
                 draggable
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
+                onClick={() => onNodeClick(code.id)}
             >
-                {/* Visual Connector for indented items */}
-                {depth > 0 && (
-                    <span className="absolute -left-3 text-zinc-700">
-                        <CornerDownRight size={10} strokeWidth={1} />
-                    </span>
-                )}
-
                 <div 
-                    onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-                    className={cn(
-                        "p-0.5 rounded hover:bg-zinc-700 text-zinc-500 transition-transform", 
-                        children.length === 0 && "opacity-0 pointer-events-none"
-                    )}
+                    className={cn("p-0.5 rounded hover:bg-white/10 cursor-pointer transition-colors", children.length === 0 && "opacity-0")}
+                    onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
                 >
-                    {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </div>
-
-                {isCategory ? <FolderOpen size={14} className="text-amber-500/80" /> : <Tag size={14} style={{ color: code.color }} />}
                 
-                <span className={cn("text-xs font-medium truncate flex-1", selectedCodeId === code.id ? "text-blue-200" : "text-zinc-300")}>
-                    {code.name}
-                </span>
-
-                {code.description && (
-                    <span title={code.description} className="text-zinc-600 mr-1">
-                        <BookType size={10} />
-                    </span>
-                )}
-
-                <span className={cn("text-[10px] text-zinc-600 font-mono w-6 text-right", isDragOver && "opacity-0")}>
-                    {usageCount}
-                </span>
+                <div className="w-2 h-2 rounded-full mx-1 shrink-0" style={{ backgroundColor: code.color }} />
                 
-                {/* Drag Handle Indicator (Visual cue) */}
-                <Move size={10} className="text-zinc-700 opacity-0 group-hover:opacity-100 cursor-grab" />
+                <span className="text-sm truncate flex-1">{code.name}</span>
+                
+                <span className="text-[10px] text-zinc-500 font-mono px-1">{usageCount > 0 ? usageCount : ''}</span>
 
-                {/* Context Menu Trigger (Visible on Hover) */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                         <Button variant="ghost" size="icon" className={cn("h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity", isDragOver && "opacity-0 pointer-events-none")}>
-                             <MoreHorizontal size={12} className="text-zinc-400" />
-                         </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800 text-zinc-300 w-48 z-50">
-                        <DropdownMenuLabel className="text-xs uppercase text-zinc-500">{code.name}</DropdownMenuLabel>
-                        
-                        <DropdownMenuItem onClick={() => onEditCode(code)}>
-                            <Edit2 size={12} className="mr-2"/> Edit Code
-                        </DropdownMenuItem>
-
-                        <DropdownMenuItem onClick={() => onCreateChild(code.id)}>
-                             <Plus size={12} className="mr-2"/> Add Child Code
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuSeparator className="bg-zinc-800" />
-                        
-                        <DropdownMenuItem onClick={() => onDeleteCode(code.id)} className="text-red-400 focus:text-red-400">
-                             <Trash2 size={12} className="mr-2"/> Delete
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
+                    {code.kind === 'category' && (
+                        <button 
+                            className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white"
+                            onClick={(e) => { e.stopPropagation(); onCreateChild(code.id); }}
+                            title="Add Child"
+                        >
+                            <Plus size={10} />
+                        </button>
+                    )}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white">
+                                <MoreVertical size={10} />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="bg-zinc-950 border-zinc-800 z-50">
+                            <DropdownMenuLabel className="text-xs text-zinc-500">{code.name}</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => onEditCode(code)}>Edit Details</DropdownMenuItem>
+                            {code.kind === 'category' && (
+                                <DropdownMenuItem onClick={() => onCreateChild(code.id)}>Add Sub-Code</DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator className="bg-zinc-800"/>
+                            <DropdownMenuItem onClick={() => onDeleteCode(code.id)} className="text-red-500">Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
 
-            {isOpen && children.map(child => (
-                <TreeItem 
-                    key={child.id}
-                    code={child}
-                    allCodes={allCodes}
-                    codings={codings}
-                    depth={depth + 1}
-                    searchTerm={searchTerm}
-                    selectedCodeId={selectedCodeId}
-                    onNodeClick={onNodeClick}
-                    onUpdateCode={onUpdateCode}
-                    onCodeDrop={onCodeDrop}
-                    onDeleteCode={onDeleteCode}
-                    onEditCode={onEditCode}
-                    onCreateChild={onCreateChild}
-                />
-            ))}
+            {isExpanded && children.length > 0 && (
+                <div className="border-l border-zinc-800 ml-2 pl-1">
+                    {children.map(child => (
+                        <TreeItem 
+                            key={child.id}
+                            code={child}
+                            allCodes={allCodes}
+                            codings={codings}
+                            depth={depth}
+                            searchTerm={searchTerm}
+                            selectedCodeId={selectedCodeId}
+                            onNodeClick={onNodeClick}
+                            onUpdateCode={props.onUpdateCode}
+                            onCodeDrop={onCodeDrop}
+                            onDeleteCode={onDeleteCode}
+                            onEditCode={onEditCode}
+                            onCreateChild={onCreateChild}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
 
-interface TableProps {
+// --- TABLE VIEW COMPONENT ---
+
+interface OntologyTableProps {
     codes: Code[];
     codings: Coding[];
     searchTerm: string;
@@ -680,91 +689,59 @@ interface TableProps {
     onCreateCode: () => void;
 }
 
-const OntologyTable: React.FC<TableProps> = ({ codes, codings, searchTerm, onUpdateCode, onDeleteCode, onEditCode, onCreateCode }) => {
-    
-    // Sort logic
-    const filteredCodes = codes.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    const categories = codes.filter(c => c.kind === 'category');
+const OntologyTable: React.FC<OntologyTableProps> = ({ codes, codings, searchTerm, onUpdateCode, onDeleteCode, onEditCode, onCreateCode }) => {
+    const filtered = codes.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return (
-        <div className="w-full">
-            <div className="grid grid-cols-12 gap-2 text-[10px] uppercase font-bold text-zinc-500 mb-2 px-2">
-                <div className="col-span-4">Name</div>
-                <div className="col-span-2">Type</div>
-                <div className="col-span-4">Parent Category</div>
-                <div className="col-span-2 text-right">Usage</div>
-            </div>
-
-            <div className="space-y-1">
-                {filteredCodes.map(code => (
-                    <div key={code.id} className="grid grid-cols-12 gap-2 items-center p-2 bg-zinc-950/30 border border-zinc-800/50 rounded-md hover:bg-zinc-900 text-xs">
-                        {/* Name & Color */}
-                        <div className="col-span-4 flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
-                            <span 
-                                className="text-zinc-300 font-medium cursor-pointer hover:underline truncate flex-1"
-                                onClick={() => onEditCode(code)}
-                            >
-                                {code.name}
-                            </span>
-                            {code.description && <BookType size={10} className="text-zinc-600 shrink-0" />}
-                        </div>
-
-                        {/* Kind Toggle */}
-                        <div className="col-span-2">
-                             <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                     <Badge variant="outline" className={cn(
-                                         "cursor-pointer hover:bg-zinc-800 border-zinc-700",
-                                         code.kind === 'category' ? "text-amber-500" : "text-blue-500"
-                                     )}>
-                                         {code.kind}
-                                     </Badge>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="bg-zinc-900 border-zinc-800">
-                                    <DropdownMenuItem onClick={() => onUpdateCode(code.id, { kind: 'code' })}>Code</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onUpdateCode(code.id, { kind: 'category' })}>Category</DropdownMenuItem>
-                                </DropdownMenuContent>
-                             </DropdownMenu>
-                        </div>
-
-                        {/* Parent Dropdown */}
-                        <div className="col-span-4">
-                            <select 
-                                className="w-full bg-zinc-900 border border-zinc-800 rounded px-1 py-0.5 text-zinc-400 text-[10px] focus:outline-none"
-                                value={code.parentId || ''}
-                                onChange={(e) => onUpdateCode(code.id, { parentId: e.target.value || undefined })}
-                            >
-                                <option value="">(Root)</option>
-                                {categories.filter(c => c.id !== code.id).map(cat => (
-                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Usage & Delete */}
-                        <div className="col-span-2 flex items-center justify-end gap-2">
-                            <span className="font-mono text-zinc-500">{codings.filter(c => c.codeId === code.id).length}</span>
-                            <Button size="icon" variant="ghost" className="h-5 w-5 text-zinc-600 hover:text-white" onClick={() => onEditCode(code)}>
-                                <Edit2 size={12} />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-5 w-5 text-zinc-600 hover:text-red-500" onClick={() => onDeleteCode(code.id)}>
-                                <Trash2 size={12} />
-                            </Button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-             <div className="pt-4 border-t border-zinc-800 mt-4">
-                 <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="w-full text-xs"
-                    onClick={() => onCreateCode(undefined)}
-                >
-                     <Plus size={12} className="mr-2" /> Add New Row
-                 </Button>
-             </div>
+        <div className="w-full h-full overflow-auto bg-zinc-900/30 rounded border border-zinc-800">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-zinc-950 text-zinc-500 text-xs uppercase font-medium sticky top-0 z-10">
+                    <tr>
+                        <th className="p-3 border-b border-zinc-800">Name</th>
+                        <th className="p-3 border-b border-zinc-800">Kind</th>
+                        <th className="p-3 border-b border-zinc-800">Usages</th>
+                        <th className="p-3 border-b border-zinc-800">Description</th>
+                        <th className="p-3 border-b border-zinc-800 w-16">Actions</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/50">
+                    {filtered.map(code => {
+                        const count = codings.filter(c => c.codeId === code.id).length;
+                        return (
+                            <tr key={code.id} className="hover:bg-zinc-800/30 transition-colors group">
+                                <td className="p-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: code.color }} />
+                                        <span className="text-zinc-200 font-medium">{code.name}</span>
+                                    </div>
+                                </td>
+                                <td className="p-3">
+                                    <Badge variant="outline" className="text-[10px] h-5 border-zinc-700 text-zinc-400 capitalize bg-zinc-900/50">
+                                        {code.kind}
+                                    </Badge>
+                                </td>
+                                <td className="p-3 font-mono text-xs text-zinc-400">{count}</td>
+                                <td className="p-3 text-xs text-zinc-500 max-w-[200px] truncate" title={code.description}>
+                                    {code.description || '-'}
+                                </td>
+                                <td className="p-3">
+                                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => onEditCode(code)} className="p-1 text-zinc-500 hover:text-white"><Edit2 size={12}/></button>
+                                        <button onClick={() => onDeleteCode(code.id)} className="p-1 text-zinc-500 hover:text-red-500"><Trash2 size={12}/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                    {filtered.length === 0 && (
+                        <tr>
+                            <td colSpan={5} className="p-8 text-center text-zinc-600 text-xs italic">
+                                No codes found.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
         </div>
     );
 };

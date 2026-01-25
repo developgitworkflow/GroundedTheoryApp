@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant, MEMO_TYPES, MemoCategory } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, Save, X, Search, Plus, Tag, Activity, Command as CommandIcon, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User, Eye, Layers, Trash2 } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, Save, X, Search, Plus, Tag, Activity, Command as CommandIcon, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User, Eye, Layers, Trash2, Folder } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -370,7 +370,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             <div className="shrink-0 flex flex-col items-center gap-2">
                                 <div className="h-12 w-12 rounded-lg flex items-center justify-center border border-zinc-800 bg-zinc-900/50 shadow-inner">
                                     {(activeHover.data as Code).kind === 'category' ? 
-                                        <FolderTree size={24} style={{ color: (activeHover.data as Code).color }} /> : 
+                                        <Folder size={24} style={{ color: (activeHover.data as Code).color }} /> : 
                                         <Tag size={24} style={{ color: (activeHover.data as Code).color }} />
                                     }
                                 </div>
@@ -379,7 +379,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                             <div className="flex-1 space-y-1">
                                 {activeHover.relatedData.parentCode && (
                                     <div className="flex items-center gap-1 text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
-                                        <FolderTree size={10} /> 
+                                        <Folder size={10} /> 
                                         {activeHover.relatedData.parentCode.name}
                                         <ChevronRight size={10} />
                                     </div>
@@ -602,7 +602,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                      <CommandGroup heading="Structural Categories">
                                          {codes.filter(c => c.kind === 'category').map(code => (
                                              <CommandItem key={code.id} value={code.name} onSelect={() => applyCode(code.name, code.id)}>
-                                                 <FolderTree size={12} className="mr-2 text-amber-500/80" /> 
+                                                 <Folder size={12} className="mr-2 text-amber-500/80" /> 
                                                  <span className="font-medium text-amber-100/80 flex-1">{code.name}</span>
                                                  {code.isCore && <Badge variant="outline" className="ml-auto text-[8px] h-3 px-1 border-amber-500/50 text-amber-500">CORE</Badge>}
                                              </CommandItem>

@@ -9,7 +9,8 @@ import {
   FolderTree, 
   Palette, 
   BookType, 
-  Type
+  Type,
+  Folder
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Badge } from './ui/badge';
@@ -112,7 +113,7 @@ export const CodeEditDialog: React.FC<CodeEditDialogProps> = ({
                         </div>
                         <div className="w-1/3 space-y-1.5">
                             <label className="text-[10px] uppercase font-bold text-zinc-500 flex items-center gap-1">
-                                <FolderTree size={10} /> Type
+                                <Folder size={10} /> Type
                             </label>
                             <div className="flex bg-zinc-900 p-1 rounded-md border border-zinc-800">
                                 <button
