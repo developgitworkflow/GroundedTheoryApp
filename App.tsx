@@ -391,6 +391,13 @@ export default function App() {
       }
   };
 
+  const handleDeleteMemo = (id: string) => {
+      if(confirm("Permanently delete this annotation?")) {
+          setMemos(prev => prev.filter(m => m.id !== id));
+          addJournalEntry(`Deleted memo: ${id}`, 'auto');
+      }
+  };
+
   const handleElaborateOntology = async () => {
       setIsElaborating(true);
       const suggestions = await suggestOntology(codes);
@@ -736,9 +743,9 @@ export default function App() {
                                             if(m.relatedIds.length > 0) {
                                                 const artId = m.relatedIds[0];
                                                 setActiveArtifactId(artId);
-                                                // Highlight logic could go here
                                             }
                                         }}
+                                        onDeleteMemo={handleDeleteMemo}
                                     />
                                  )}
                              </div>
@@ -789,11 +796,7 @@ export default function App() {
                         onUpdateMemo={(id, updates) => {
                             setMemos(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
                         }}
-                        onDeleteMemo={(id) => {
-                            if(confirm("Delete this memo?")) {
-                                setMemos(prev => prev.filter(m => m.id !== id));
-                            }
-                        }}
+                        onDeleteMemo={handleDeleteMemo}
                         onCreateCode={(name, kind) => handleCreateCode(name, kind)}
                         onUpdateCode={handleUpdateCode}
                         theoryArtefact={theoryArtefact}

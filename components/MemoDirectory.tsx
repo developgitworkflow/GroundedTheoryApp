@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Memo, Artifact, MEMO_TYPES, MemoCategory } from '../types';
-import { StickyNote, Book, Lightbulb, Search, Calendar, FileText, Filter } from 'lucide-react';
+import { StickyNote, Book, Lightbulb, Search, Calendar, FileText, Filter, Trash2 } from 'lucide-react';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { cn } from '../lib/utils';
@@ -11,9 +11,10 @@ interface MemoDirectoryProps {
   memos: Memo[];
   artifacts: Artifact[];
   onSelectMemo: (memo: Memo) => void;
+  onDeleteMemo?: (id: string) => void;
 }
 
-export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, onSelectMemo }) => {
+export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, onSelectMemo, onDeleteMemo }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
 
@@ -85,7 +86,24 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
                         className="group bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-3 hover:bg-zinc-800 hover:border-zinc-700 cursor-pointer transition-all shadow-sm relative overflow-hidden"
                     >
                         <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: typeInfo?.color || '#3f3f46' }} />
-                        <div className="flex items-start justify-between gap-2 mb-2 pl-2">
+                        
+                        {/* Delete Action (Top Right) */}
+                        {onDeleteMemo && (
+                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteMemo(memo.id);
+                                    }}
+                                    className="p-1 text-zinc-600 hover:text-red-400 hover:bg-zinc-900 rounded transition-colors"
+                                    title="Delete Annotation"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex items-start justify-between gap-2 mb-2 pl-2 pr-4">
                             <MemoTypeBadge type={memo.type} className="text-[9px] h-5" />
                             <span className="text-[9px] text-zinc-600 font-mono shrink-0">
                                 #{memo.number}

@@ -31,7 +31,11 @@ export interface GraphLink {
  * 2. Hierarchy Links: Created between Codes and their Parent Category (Strong structural bond).
  * 3. Association Links: Created between Codes that appear in the same Artifact (Data-driven bond).
  */
-export const buildTheoryGraph = (codes: Code[], codings: Coding[]): { nodes: GraphNode[], links: GraphLink[] } => {
+export const buildTheoryGraph = (codes: Code[] = [], codings: Coding[] = []): { nodes: GraphNode[], links: GraphLink[] } => {
+  // Defensive checks
+  if (!codes) codes = [];
+  if (!codings) codings = [];
+
   // 1. Prepare Nodes
   const nodes: GraphNode[] = codes.map(c => ({
     id: c.id,

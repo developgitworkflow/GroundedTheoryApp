@@ -7,16 +7,16 @@ import {
   FileQuestion, 
   Lightbulb, 
   Wrench, 
-  BookOpen,
-  Target,
-  Database,
-  Users,
-  MapPin,
-  Settings,
-  User,
-  Mic,
-  Eye,
-  ClipboardList,
+  BookOpen, 
+  Target, 
+  Database, 
+  Users, 
+  MapPin, 
+  Settings, 
+  User, 
+  Mic, 
+  Eye, 
+  ClipboardList, 
   Laptop,
   Link as LinkIcon
 } from 'lucide-react';
@@ -42,8 +42,9 @@ export const FrameworkDiagram: React.FC<FrameworkDiagramProps> = ({
   const { fieldOfStudy, theoreticalFramework } = settings;
   const findings = memos.filter(m => m.type === 'finding' || m.type === 'theoretical');
 
-  // Sort methods by type to group them logically
-  const sortedMethods = [...theoreticalFramework.methods].sort((a, b) => a.type.localeCompare(b.type));
+  // Sort methods by type to group them logically. Defensive check for methods array.
+  const methods = theoreticalFramework?.methods || [];
+  const sortedMethods = [...methods].sort((a, b) => a.type.localeCompare(b.type));
 
   const getMethodIcon = (type: string) => {
       switch (type) {
