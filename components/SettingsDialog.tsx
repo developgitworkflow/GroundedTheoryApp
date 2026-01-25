@@ -489,6 +489,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 <div className="px-3 py-1 text-[10px] uppercase font-bold text-zinc-600">Ontology</div>
                 
                 <NavButton 
+                    active={activeTab === 'research_questions'} 
+                    onClick={() => setActiveTab('research_questions')} 
+                    icon={FileQuestion} 
+                    label="Research Questions" 
+                />
+                <NavButton 
                     active={activeTab === 'participants'} 
                     onClick={() => setActiveTab('participants')} 
                     icon={PersonStanding} 
@@ -683,7 +689,55 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
                 )}
 
-                {/* ... other tabs ... */}
+                {activeTab === 'research_questions' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="flex justify-between items-start">
+                            <SectionHeader title="Research Questions" description="The questions guiding the inquiry." />
+                            <div className="flex gap-2">
+                                {onConvertToArtifact && (
+                                    <Button 
+                                        size="xs" 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            const content = `# Research Questions\n\n${localSettings.theoreticalFramework.researchQuestions.map(rq => `1. ${rq.content}`).join('\n')}`;
+                                            onConvertToArtifact('Research Questions', content, 'Methodology');
+                                        }}
+                                        className="gap-2 text-zinc-400 hover:text-white"
+                                    >
+                                        <FileText size={14}/> Save as Artifact
+                                    </Button>
+                                )}
+                                <Button size="xs" variant="brand" onClick={addRQ} className="gap-2"><Plus size={14}/> Add RQ</Button>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {localSettings.theoreticalFramework.researchQuestions.length === 0 && (
+                                <p className="text-zinc-500 text-sm italic border border-dashed border-zinc-800 p-8 text-center rounded-lg">No research questions defined.</p>
+                            )}
+                            {localSettings.theoreticalFramework.researchQuestions.map(rq => (
+                                <div key={rq.id} className="flex gap-3 items-start bg-zinc-900/30 p-3 rounded-lg border border-zinc-800">
+                                    <div className="p-2 bg-zinc-900 rounded border border-zinc-800 text-zinc-500 mt-1" title={`ID: ${rq.id}`}>
+                                        <FileQuestion size={16} />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <div className="text-[10px] text-zinc-500 font-mono">ID: {rq.id}</div>
+                                        <Input 
+                                            value={rq.content}
+                                            onChange={(e) => updateRQ(rq.id, e.target.value)}
+                                            className="bg-zinc-950"
+                                            placeholder="Enter research question content..."
+                                        />
+                                    </div>
+                                    <Button size="icon" variant="ghost" onClick={() => removeRQ(rq.id)} className="text-zinc-600 hover:text-red-500 mt-1">
+                                        <Trash2 size={14} />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'participants' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                         <div className="flex justify-between items-start">
@@ -750,17 +804,17 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                 {activeTab === 'methodology' && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                        {/* Research Questions */}
+                        {/* Methods */}
                         <div>
                              <div className="flex justify-between items-start mb-4">
-                                <SectionHeader title="Research Questions" description="The questions guiding the inquiry." />
+                                <SectionHeader title="Methods & Protocols" description="Data collection strategies and actor mapping." />
                                 <div className="flex gap-2">
                                     {onConvertToArtifact && (
                                         <Button 
                                             size="xs" 
                                             variant="outline" 
                                             onClick={() => {
-                                                const content = `# Research Design\n\n## Research Questions\n${localSettings.theoreticalFramework.researchQuestions.map(rq => `1. ${rq.content}`).join('\n')}\n\n## Methods\n${localSettings.theoreticalFramework.methods.map(m => `### ${m.type}\n${m.protocolContent}\n`).join('\n')}`;
+                                                const content = `# Methods Protocol\n\n${localSettings.theoreticalFramework.methods.map(m => `### ${m.type}\n${m.protocolContent}\n`).join('\n')}`;
                                                 onConvertToArtifact('Research Design', content, 'Methodology');
                                             }}
                                             className="gap-2 text-zinc-400 hover:text-white"
@@ -768,39 +822,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                                             <FileText size={14}/> Save as Artifact
                                         </Button>
                                     )}
-                                    <Button size="xs" variant="outline" onClick={addRQ} className="gap-2"><Plus size={14}/> Add RQ</Button>
+                                    <Button size="xs" variant="outline" onClick={addMethod} className="gap-2"><Plus size={14}/> Add Method</Button>
                                 </div>
-                             </div>
-                             <div className="space-y-3">
-                                {localSettings.theoreticalFramework.researchQuestions.map(rq => (
-                                    <div key={rq.id} className="flex gap-3 items-start bg-zinc-900/30 p-3 rounded-lg border border-zinc-800">
-                                        <div className="p-2 bg-zinc-900 rounded border border-zinc-800 text-zinc-500 mt-1" title={`ID: ${rq.id}`}>
-                                            <FileQuestion size={16} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <div className="text-[10px] text-zinc-500 font-mono">ID: {rq.id}</div>
-                                            <Input 
-                                                value={rq.content}
-                                                onChange={(e) => updateRQ(rq.id, e.target.value)}
-                                                className="bg-zinc-950"
-                                                placeholder="Enter research question content..."
-                                            />
-                                        </div>
-                                        <Button size="icon" variant="ghost" onClick={() => removeRQ(rq.id)} className="text-zinc-600 hover:text-red-500 mt-1">
-                                            <Trash2 size={14} />
-                                        </Button>
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
-
-                        <div className="h-px bg-zinc-800" />
-
-                        {/* Methods */}
-                        <div>
-                             <div className="flex justify-between items-start mb-4">
-                                <SectionHeader title="Methods & Participants" description="Data collection strategies and actor mapping." />
-                                <Button size="xs" variant="outline" onClick={addMethod} className="gap-2"><Plus size={14}/> Add Method</Button>
                              </div>
                              <div className="space-y-4">
                                 {localSettings.theoreticalFramework.methods.map(m => (
