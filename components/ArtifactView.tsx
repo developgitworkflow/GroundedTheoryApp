@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Artifact, Coding, Code, LayerType, Memo, ResearchTeam, Researcher, Vote, VoteStatus, Participant, MEMO_TYPES, MemoCategory } from '../types';
 import { suggestCodes } from '../services/geminiService';
-import { Wand2, Loader2, StickyNote, MessageSquare, Save, X, Search, Plus, Tag, Activity, Command as CommandIcon, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User, Eye, Layers } from 'lucide-react';
+import { Wand2, Loader2, StickyNote, MessageSquare, Save, X, Search, Plus, Tag, Activity, Command as CommandIcon, FolderTree, GitPullRequest, Info, ChevronRight, Edit2, User, Eye, Layers, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -28,6 +28,7 @@ interface ArtifactViewProps {
   onAddMemo?: (snippet: string, content: string, range?: {start: number, end: number}, type?: MemoCategory) => void;
   onEditMemo?: (memo: Memo) => void;
   onUpdateMemo?: (id: string, content: string) => void;
+  onDeleteMemo?: (id: string) => void;
   highlightedMemoId?: string;
   selectedCodeId?: string | null;
   onClearSelection?: () => void;
@@ -58,6 +59,7 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
   onAddMemo,
   onEditMemo,
   onUpdateMemo,
+  onDeleteMemo,
   highlightedMemoId,
   selectedCodeId,
   onClearSelection,
@@ -439,7 +441,21 @@ export const ArtifactView: React.FC<ArtifactViewProps> = ({
                                         <h3 className="font-bold text-sm text-zinc-200 leading-snug italic cursor-text hover:text-white transition-colors" onClick={startEditing}>
                                             "{(activeHover.data as Memo).content}"
                                         </h3>
-                                        <div className="flex justify-end">
+                                        <div className="flex justify-end gap-2">
+                                            {onDeleteMemo && (
+                                                <Button 
+                                                    size="xs" 
+                                                    variant="ghost" 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeleteMemo((activeHover.data as Memo).id);
+                                                        setActiveHover(null);
+                                                    }} 
+                                                    className="h-6 text-[10px] gap-1 hover:text-red-400 text-zinc-500"
+                                                >
+                                                    <Trash2 size={10} /> Delete
+                                                </Button>
+                                            )}
                                             <Button 
                                                 size="xs" 
                                                 variant="outline" 

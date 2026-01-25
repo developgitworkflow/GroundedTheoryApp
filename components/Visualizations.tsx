@@ -5,6 +5,7 @@ import { BarChart3, PieChart, Activity, Grid, FileText, Table as TableIcon, Netw
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { cn } from '../lib/utils';
 
 interface VisualizationsProps {
   codes: Code[];
@@ -72,7 +73,7 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
       {/* Main Chart Area */}
       <div className="flex-1 overflow-hidden p-6 relative bg-zinc-950">
         <Card className="h-full border-zinc-800 bg-zinc-900/20 shadow-xl overflow-hidden flex flex-col">
-            <CardHeader className="border-b border-zinc-800 pb-4 bg-zinc-900/50">
+            <CardHeader className="border-b border-zinc-800 pb-4 bg-zinc-900/50 shrink-0">
                 <CardTitle className="text-zinc-200 flex items-center gap-2 text-lg">
                     {activeChart === 'bar' && 'Code Frequency Distribution'}
                     {activeChart === 'donut' && 'Coding Proportions'}
@@ -83,7 +84,7 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
                     {activeChart === 'table' && 'Coding Statistics'}
                 </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 p-0 overflow-hidden relative">
+            <CardContent className="flex-1 p-0 overflow-hidden relative min-h-0">
                 {activeChart === 'bar' && <BarChart data={codeStats} />}
                 {activeChart === 'donut' && <DonutChart data={codeStats} />}
                 {activeChart === 'treemap' && <TreeMap data={codeStats} />}
@@ -219,51 +220,166 @@ const DonutChart = ({ data }: { data: (Code & { count: number })[] }) => {
 const TreeMap = ({ data }: { data: (Code & { count: number })[] }) => {
     const ref = useRef<SVGSVGElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+    // D3 Rendering
     useEffect(() => {
-        if (!ref.current || !wrapperRef.current) return;
+        if (!ref.current || !wrapperRef.current || data.length === 0) return;
         const svg = d3.select(ref.current);
         svg.selectAll("*").remove();
 
         const { width, height } = wrapperRef.current.getBoundingClientRect();
         
-        const root = d3.hierarchy({ children: data })
+        const validData = data.filter(d => d.count > 0);
+        if (validData.length === 0) {
+            svg.append("text")
+                .attr("x", width/2)
+                .attr("y", height/2)
+                .attr("text-anchor", "middle")
+                .attr("fill", "#71717a")
+                .text("No coding data available");
+            return;
+        }
+
+        const root = d3.hierarchy({ children: validData })
             .sum((d: any) => d.count)
             .sort((a, b) => (b.value || 0) - (a.value || 0));
 
         d3.treemap()
             .size([width, height])
-            .padding(2)
+            .paddingInner(2)
+            .paddingOuter(0)
+            .round(true)
             (root);
 
-        // Cast leaves to Rectangular node to access coordinates
         const leaves = root.leaves() as d3.HierarchyRectangularNode<any>[];
 
-        const nodes = svg.selectAll("g")
+        const g = svg.append("g");
+
+        const nodes = g.selectAll("g")
             .data(leaves)
             .enter()
             .append("g")
-            .attr("transform", d => `translate(${d.x0},${d.y0})`);
+            .attr("transform", d => `translate(${d.x0},${d.y0})`)
+            .attr("class", "node-group")
+            .style("cursor", "pointer")
+            .on("mouseenter", (_, d) => setHoveredId(d.data.id))
+            .on("mouseleave", () => setHoveredId(null));
 
         nodes.append("rect")
+            .attr("id", d => `rect-${d.data.id}`)
             .attr("width", d => d.x1 - d.x0)
             .attr("height", d => d.y1 - d.y0)
             .attr("fill", (d: any) => d.data.color)
-            .attr("rx", 2);
+            .attr("rx", 4)
+            .attr("stroke", "#18181b") 
+            .attr("stroke-width", 2)
+            .style("transition", "all 0.2s ease");
+
+        nodes.append("clipPath")
+            .attr("id", d => `clip-${d.data.id}`)
+            .append("rect")
+            .attr("width", d => Math.max(0, d.x1 - d.x0 - 4))
+            .attr("height", d => Math.max(0, d.y1 - d.y0 - 4));
 
         nodes.append("text")
-            .attr("x", 4)
-            .attr("y", 14)
-            .text((d: any) => `${d.data.name} (${d.data.count})`)
+            .attr("clip-path", d => `url(#clip-${d.data.id})`)
+            .attr("x", 6)
+            .attr("y", 18)
+            .text((d: any) => d.data.name)
             .attr("fill", "white")
+            .attr("font-size", "11px")
+            .attr("font-weight", "bold")
+            .style("pointer-events", "none")
+            .style("text-shadow", "0 1px 2px rgba(0,0,0,0.5)");
+            
+        nodes.append("text")
+            .attr("clip-path", d => `url(#clip-${d.data.id})`)
+            .attr("x", 6)
+            .attr("y", 32)
+            .text((d: any) => d.value)
+            .attr("fill", "rgba(255,255,255,0.7)")
             .attr("font-size", "10px")
-            .style("font-weight", "bold");
+            .style("pointer-events", "none");
 
     }, [data]);
 
+    // Hover Effect
+    useEffect(() => {
+        if (!ref.current) return;
+        const svg = d3.select(ref.current);
+        
+        svg.selectAll("rect")
+            .attr("fill-opacity", hoveredId ? 0.3 : 1)
+            .attr("stroke", "#18181b")
+            .attr("stroke-width", 2);
+
+        if (hoveredId) {
+            svg.select(`#rect-${hoveredId}`)
+                .attr("fill-opacity", 1)
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 2);
+        }
+    }, [hoveredId]);
+
+    const activeCode = data.find(c => c.id === hoveredId);
+
     return (
-        <div ref={wrapperRef} className="w-full h-full p-4">
-            <svg ref={ref} width="100%" height="100%" />
+        <div className="flex h-full w-full">
+            <div ref={wrapperRef} className="flex-1 h-full p-4 overflow-hidden bg-zinc-900/30">
+                <svg ref={ref} width="100%" height="100%" />
+            </div>
+            
+            {/* Interactive Legend/Details */}
+            <div className="w-80 border-l border-zinc-800 bg-zinc-950 flex flex-col shrink-0">
+                <div className="p-4 border-b border-zinc-800 bg-zinc-900/50 min-h-[140px] flex flex-col justify-center">
+                    {activeCode ? (
+                        <div className="animate-in fade-in slide-in-from-right-4 duration-200">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="w-4 h-4 rounded-full shadow-lg ring-2 ring-zinc-900" style={{ backgroundColor: activeCode.color }} />
+                                <h3 className="font-bold text-lg text-zinc-100 line-clamp-1">{activeCode.name}</h3>
+                            </div>
+                            <div className="flex gap-2 mb-3">
+                                <Badge variant="outline" className="text-[10px] h-5 border-zinc-700 bg-zinc-900 text-zinc-400 uppercase">{activeCode.kind}</Badge>
+                                <Badge variant="secondary" className="text-[10px] h-5 bg-zinc-800 text-zinc-300">{activeCode.count} occurrences</Badge>
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3 italic">
+                                {activeCode.description || "No operational definition provided for this code."}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="text-center text-zinc-500 py-2">
+                            <Grid className="mx-auto mb-2 opacity-20" size={32} />
+                            <p className="text-sm font-medium">Code Density Index</p>
+                            <p className="text-xs opacity-60 mt-1">Hover over a block or list item to view details.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                    {data.map(code => (
+                        <div 
+                            key={code.id}
+                            onMouseEnter={() => setHoveredId(code.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            className={cn(
+                                "flex items-center justify-between p-2 rounded cursor-pointer transition-all border",
+                                hoveredId === code.id 
+                                    ? "bg-zinc-800 border-zinc-700 shadow-md translate-x-1" 
+                                    : "bg-transparent border-transparent hover:bg-zinc-900"
+                            )}
+                        >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: code.color }} />
+                                <span className={cn("text-sm truncate", hoveredId === code.id ? "text-zinc-100 font-medium" : "text-zinc-400")}>
+                                    {code.name}
+                                </span>
+                            </div>
+                            <span className="text-xs font-mono text-zinc-600">{code.count}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 };

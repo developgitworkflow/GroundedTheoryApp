@@ -654,6 +654,10 @@ export default function App() {
                                                  setMemos(prev => prev.map(m => m.id === memo.id ? { ...m, content: newContent } : m));
                                             }
                                         }}
+                                        onUpdateMemo={(id, content) => {
+                                            setMemos(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+                                        }}
+                                        onDeleteMemo={handleDeleteMemo}
                                         selectedCodeId={codeFilter}
                                         onClearSelection={() => setCodeFilter(null)}
                                         onUpdateArtifact={handleUpdateArtifact}

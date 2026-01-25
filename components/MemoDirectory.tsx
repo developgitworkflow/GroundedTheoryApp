@@ -83,27 +83,27 @@ export const MemoDirectory: React.FC<MemoDirectoryProps> = ({ memos, artifacts, 
                     <div 
                         key={memo.id}
                         onClick={() => onSelectMemo(memo)}
-                        className="group bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-3 hover:bg-zinc-800 hover:border-zinc-700 cursor-pointer transition-all shadow-sm relative overflow-hidden"
+                        className="group bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-3 hover:bg-zinc-800 hover:border-zinc-700 cursor-pointer transition-all shadow-sm relative overflow-hidden pr-8"
                     >
                         <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: typeInfo?.color || '#3f3f46' }} />
                         
-                        {/* Delete Action (Top Right) */}
+                        {/* Delete Action (Top Right) - Improved visibility and hit area */}
                         {onDeleteMemo && (
-                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <div className="absolute top-1 right-1 z-10">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onDeleteMemo(memo.id);
                                     }}
-                                    className="p-1 text-zinc-600 hover:text-red-400 hover:bg-zinc-900 rounded transition-colors"
+                                    className="h-7 w-7 flex items-center justify-center text-zinc-600 hover:text-red-400 hover:bg-zinc-950/80 rounded transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
                                     title="Delete Annotation"
                                 >
-                                    <Trash2 size={12} />
+                                    <Trash2 size={14} />
                                 </button>
                             </div>
                         )}
 
-                        <div className="flex items-start justify-between gap-2 mb-2 pl-2 pr-4">
+                        <div className="flex items-start justify-between gap-2 mb-2 pl-2">
                             <MemoTypeBadge type={memo.type} className="text-[9px] h-5" />
                             <span className="text-[9px] text-zinc-600 font-mono shrink-0">
                                 #{memo.number}
