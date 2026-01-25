@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ProjectSettings, Memo, Artifact, Code, ResearchTeam } from '../types';
 import { 
@@ -8,20 +7,23 @@ import {
   Copy, 
   Save, 
   RefreshCw,
-  BookOpen,
-  Quote,
-  Target,
-  Microscope,
-  Lightbulb,
-  ScrollText,
-  ShieldCheck,
-  Globe,
-  Database,
-  Repeat,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Archive
+  BookOpen, 
+  Quote, 
+  Target, 
+  Microscope, 
+  Lightbulb, 
+  ScrollText, 
+  ShieldCheck, 
+  Globe, 
+  Database, 
+  Repeat, 
+  CheckCircle2, 
+  XCircle, 
+  AlertTriangle, 
+  Archive, 
+  GripVertical, 
+  Link as LinkIcon, 
+  X
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -48,8 +50,17 @@ export const ReportView: React.FC<ReportViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'abstract' | 'fair'>('abstract');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [draggedArtifactId, setDraggedArtifactId] = useState<string | null>(null);
 
   const abstract = settings.structuredAbstract;
+
+  // Ensure artifactMapping is initialized (for legacy data compatibility)
+  const artifactMapping = abstract.artifactMapping || {
+      background: [],
+      methods: [],
+      results: [],
+      conclusion: []
+  };
 
   // --- Auto-Generation Logic ---
   const handleAutoGenerate = () => {
@@ -84,6 +95,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
     onUpdateSettings({
         ...settings,
         structuredAbstract: {
+            ...abstract,
             background: bgText,
             methods: methodText,
             results: resultsText,
@@ -99,6 +111,38 @@ export const ReportView: React.FC<ReportViewProps> = ({
           structuredAbstract: {
               ...abstract,
               [field]: value
+          }
+      });
+  };
+
+  const handleArtifactDrop = (section: keyof typeof artifactMapping) => {
+      if (!draggedArtifactId) return;
+      
+      const currentMapping = artifactMapping[section] || [];
+      if (!currentMapping.includes(draggedArtifactId)) {
+          onUpdateSettings({
+              ...settings,
+              structuredAbstract: {
+                  ...abstract,
+                  artifactMapping: {
+                      ...artifactMapping,
+                      [section]: [...currentMapping, draggedArtifactId]
+                  }
+              }
+          });
+      }
+      setDraggedArtifactId(null);
+  };
+
+  const handleRemoveArtifact = (section: keyof typeof artifactMapping, artifactId: string) => {
+      onUpdateSettings({
+          ...settings,
+          structuredAbstract: {
+              ...abstract,
+              artifactMapping: {
+                  ...artifactMapping,
+                  [section]: artifactMapping[section].filter(id => id !== artifactId)
+              }
           }
       });
   };
@@ -153,9 +197,9 @@ export const ReportView: React.FC<ReportViewProps> = ({
 
   return (
     <div className="flex h-full bg-zinc-950 overflow-hidden">
-        {/* Left: Section Navigation */}
-        <div className="w-64 border-r border-zinc-800 bg-zinc-900/30 p-4 flex flex-col gap-2">
-            <div className="mb-4">
+        {/* Left: Section Navigation & Source Artifacts */}
+        <div className="w-72 border-r border-zinc-800 bg-zinc-900/30 flex flex-col">
+            <div className="p-4 border-b border-zinc-800">
                 <h2 className="font-bold text-zinc-100 flex items-center gap-2 text-lg">
                     <FileText className="text-emerald-500" size={20} />
                     Report Gen
@@ -163,7 +207,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
                 <p className="text-xs text-zinc-500 mt-1">Research Output & Compliance</p>
             </div>
 
-            <div className="space-y-1">
+            <div className="p-2 space-y-1 border-b border-zinc-800">
                 <Button 
                     variant={viewMode === 'abstract' && !isPreviewMode ? "secondary" : "ghost"} 
                     className="w-full justify-start gap-2" 
@@ -187,27 +231,38 @@ export const ReportView: React.FC<ReportViewProps> = ({
                 </Button>
             </div>
 
-            <div className="h-px bg-zinc-800 my-2" />
-
-            {viewMode === 'abstract' && (
-                <>
-                    <div className="p-3 bg-zinc-900/50 rounded border border-zinc-800 space-y-3">
-                        <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Data Source</div>
-                        <div className="flex justify-between text-xs text-zinc-400">
-                            <span>Artifacts</span>
-                            <span className="text-zinc-200 font-mono">{artifacts.length}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-zinc-400">
-                            <span>Codes</span>
-                            <span className="text-zinc-200 font-mono">{codes.length}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-zinc-400">
-                            <span>Findings</span>
-                            <span className="text-zinc-200 font-mono">{memos.filter(m => m.type === 'finding').length}</span>
-                        </div>
+            {viewMode === 'abstract' && !isPreviewMode && (
+                <div className="flex-1 flex flex-col min-h-0">
+                    <div className="px-4 py-2 text-xs font-bold text-zinc-500 uppercase tracking-wider bg-zinc-950/50">
+                        Source Artifacts
                     </div>
-
-                    <div className="mt-auto space-y-2">
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                        {artifacts.map(art => {
+                            // Check if mapped anywhere
+                            const isMapped = Object.values(artifactMapping).some((list: any) => list.includes(art.id));
+                            return (
+                                <div 
+                                    key={art.id}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        setDraggedArtifactId(art.id);
+                                        e.dataTransfer.setData('text/plain', art.id);
+                                        e.dataTransfer.effectAllowed = 'copy';
+                                    }}
+                                    className="p-2 bg-zinc-950 border border-zinc-800 rounded cursor-grab hover:bg-zinc-900 group active:cursor-grabbing relative"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <GripVertical size={12} className="text-zinc-600 group-hover:text-zinc-400"/>
+                                        <span className="text-xs text-zinc-300 truncate font-medium">{art.name}</span>
+                                        {isMapped && <LinkIcon size={10} className="ml-auto text-blue-500" />}
+                                    </div>
+                                    <div className="pl-5 text-[10px] text-zinc-500 truncate">{art.curation.source}</div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                    
+                    <div className="p-3 border-t border-zinc-800 space-y-2 bg-zinc-900/10">
                         <Button 
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-900/20"
                             onClick={handleAutoGenerate}
@@ -224,11 +279,11 @@ export const ReportView: React.FC<ReportViewProps> = ({
                             </Button>
                         )}
                     </div>
-                </>
+                </div>
             )}
             
             {viewMode === 'fair' && (
-                <div className="p-4 bg-emerald-950/20 rounded border border-emerald-900/50">
+                <div className="p-4 bg-emerald-950/20 rounded border border-emerald-900/50 m-4">
                     <h3 className="text-emerald-400 font-bold text-xs uppercase mb-2">FAIR Score</h3>
                     <div className="text-3xl font-bold text-zinc-100 mb-1">
                         {Math.round((fairStats.fScore + fairStats.aScore + fairStats.iScore + fairStats.rScore) / 4)}%
@@ -291,76 +346,64 @@ export const ReportView: React.FC<ReportViewProps> = ({
                 {viewMode === 'abstract' && !isPreviewMode && (
                     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                         {/* Background */}
-                        <Card className="bg-zinc-900/20 border-zinc-800">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-bold text-zinc-300 uppercase flex items-center gap-2">
-                                    <Target size={16} className="text-blue-500"/> Background / Objective
-                                </CardTitle>
-                                <p className="text-xs text-zinc-500">What is the problem being addressed, and what was the specific goal or hypothesis?</p>
-                            </CardHeader>
-                            <CardContent>
-                                <Textarea 
-                                    className="min-h-[120px] bg-zinc-950/50 border-zinc-800 text-zinc-300 leading-relaxed focus:border-blue-500/50"
-                                    value={abstract.background}
-                                    onChange={(e) => handleUpdate('background', e.target.value)}
-                                    placeholder="Click 'Auto-Generate' or type here..."
-                                />
-                            </CardContent>
-                        </Card>
+                        <ReportSectionCard 
+                            title="Background / Objective"
+                            description="What is the problem being addressed, and what was the specific goal or hypothesis?"
+                            icon={Target}
+                            iconColor="text-blue-500"
+                            borderColor="focus:border-blue-500/50"
+                            value={abstract.background}
+                            onChange={(val) => handleUpdate('background', val)}
+                            mappedArtifacts={artifactMapping.background}
+                            onDrop={() => handleArtifactDrop('background')}
+                            onRemoveArtifact={(id) => handleRemoveArtifact('background', id)}
+                            allArtifacts={artifacts}
+                        />
 
                         {/* Methods */}
-                        <Card className="bg-zinc-900/20 border-zinc-800">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-bold text-zinc-300 uppercase flex items-center gap-2">
-                                    <Microscope size={16} className="text-purple-500"/> Methods
-                                </CardTitle>
-                                <p className="text-xs text-zinc-500">How was the research conducted? (Participants, Protocol, Analysis type)</p>
-                            </CardHeader>
-                            <CardContent>
-                                <Textarea 
-                                    className="min-h-[120px] bg-zinc-950/50 border-zinc-800 text-zinc-300 leading-relaxed focus:border-purple-500/50"
-                                    value={abstract.methods}
-                                    onChange={(e) => handleUpdate('methods', e.target.value)}
-                                    placeholder="Describe methodology..."
-                                />
-                            </CardContent>
-                        </Card>
+                        <ReportSectionCard 
+                            title="Methods"
+                            description="How was the research conducted? (Participants, Protocol, Analysis type)"
+                            icon={Microscope}
+                            iconColor="text-purple-500"
+                            borderColor="focus:border-purple-500/50"
+                            value={abstract.methods}
+                            onChange={(val) => handleUpdate('methods', val)}
+                            mappedArtifacts={artifactMapping.methods}
+                            onDrop={() => handleArtifactDrop('methods')}
+                            onRemoveArtifact={(id) => handleRemoveArtifact('methods', id)}
+                            allArtifacts={artifacts}
+                        />
 
                         {/* Results */}
-                        <Card className="bg-zinc-900/20 border-zinc-800">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-bold text-zinc-300 uppercase flex items-center gap-2">
-                                    <Lightbulb size={16} className="text-amber-500"/> Results
-                                </CardTitle>
-                                <p className="text-xs text-zinc-500">What were the main findings? (Core category, key themes)</p>
-                            </CardHeader>
-                            <CardContent>
-                                <Textarea 
-                                    className="min-h-[120px] bg-zinc-950/50 border-zinc-800 text-zinc-300 leading-relaxed focus:border-amber-500/50"
-                                    value={abstract.results}
-                                    onChange={(e) => handleUpdate('results', e.target.value)}
-                                    placeholder="Summarize findings..."
-                                />
-                            </CardContent>
-                        </Card>
+                        <ReportSectionCard 
+                            title="Results"
+                            description="What were the main findings? (Core category, key themes)"
+                            icon={Lightbulb}
+                            iconColor="text-amber-500"
+                            borderColor="focus:border-amber-500/50"
+                            value={abstract.results}
+                            onChange={(val) => handleUpdate('results', val)}
+                            mappedArtifacts={artifactMapping.results}
+                            onDrop={() => handleArtifactDrop('results')}
+                            onRemoveArtifact={(id) => handleRemoveArtifact('results', id)}
+                            allArtifacts={artifacts}
+                        />
 
                         {/* Conclusion */}
-                        <Card className="bg-zinc-900/20 border-zinc-800">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-bold text-zinc-300 uppercase flex items-center gap-2">
-                                    <Quote size={16} className="text-emerald-500"/> Conclusion
-                                </CardTitle>
-                                <p className="text-xs text-zinc-500">What do the results mean? Practical or theoretical implications.</p>
-                            </CardHeader>
-                            <CardContent>
-                                <Textarea 
-                                    className="min-h-[120px] bg-zinc-950/50 border-zinc-800 text-zinc-300 leading-relaxed focus:border-emerald-500/50"
-                                    value={abstract.conclusion}
-                                    onChange={(e) => handleUpdate('conclusion', e.target.value)}
-                                    placeholder="Implications..."
-                                />
-                            </CardContent>
-                        </Card>
+                        <ReportSectionCard 
+                            title="Conclusion"
+                            description="What do the results mean? Practical or theoretical implications."
+                            icon={Quote}
+                            iconColor="text-emerald-500"
+                            borderColor="focus:border-emerald-500/50"
+                            value={abstract.conclusion}
+                            onChange={(val) => handleUpdate('conclusion', val)}
+                            mappedArtifacts={artifactMapping.conclusion}
+                            onDrop={() => handleArtifactDrop('conclusion')}
+                            onRemoveArtifact={(id) => handleRemoveArtifact('conclusion', id)}
+                            allArtifacts={artifacts}
+                        />
 
                         {/* Keywords */}
                         <div className="bg-zinc-900/50 p-4 rounded border border-zinc-800 flex items-center gap-4">
@@ -436,6 +479,93 @@ export const ReportView: React.FC<ReportViewProps> = ({
     </div>
   );
 };
+
+const ReportSectionCard: React.FC<{
+    title: string;
+    description: string;
+    icon: any;
+    iconColor: string;
+    borderColor: string;
+    value: string;
+    onChange: (val: string) => void;
+    mappedArtifacts: string[];
+    onDrop: () => void;
+    onRemoveArtifact: (id: string) => void;
+    allArtifacts: Artifact[];
+}> = ({ title, description, icon: Icon, iconColor, borderColor, value, onChange, mappedArtifacts, onDrop, onRemoveArtifact, allArtifacts }) => {
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        onDrop();
+    };
+
+    return (
+        <Card 
+            className={cn(
+                "bg-zinc-900/20 border-zinc-800 transition-all",
+                isDragOver ? "ring-2 ring-blue-500/50 bg-zinc-900/40" : ""
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-bold text-zinc-300 uppercase flex items-center gap-2">
+                    <Icon size={16} className={iconColor}/> {title}
+                </CardTitle>
+                <p className="text-xs text-zinc-500">{description}</p>
+            </CardHeader>
+            <CardContent>
+                <Textarea 
+                    className={cn("min-h-[120px] bg-zinc-950/50 border-zinc-800 text-zinc-300 leading-relaxed", borderColor)}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder="Drag and drop artifacts here to link them..."
+                />
+                
+                {/* Mapped Artifacts Area */}
+                {mappedArtifacts.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-zinc-800/50">
+                        <span className="text-[10px] text-zinc-500 uppercase font-bold self-center">Evidence:</span>
+                        {mappedArtifacts.map(id => {
+                            const art = allArtifacts.find(a => a.id === id);
+                            if (!art) return null;
+                            return (
+                                <Badge key={id} variant="secondary" className="bg-zinc-900 hover:bg-zinc-800 text-zinc-400 gap-1 pr-1 group">
+                                    <LinkIcon size={10} className="text-blue-500" />
+                                    {art.name}
+                                    <button 
+                                        onClick={() => onRemoveArtifact(id)}
+                                        className="ml-1 p-0.5 rounded-full hover:bg-zinc-700 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                        <X size={10} />
+                                    </button>
+                                </Badge>
+                            )
+                        })}
+                    </div>
+                )}
+                {isDragOver && (
+                    <div className="mt-2 text-xs text-blue-400 text-center animate-pulse">
+                        Drop to link artifact
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
 
 const FairCard: React.FC<{ title: string; icon: any; color: string; score: number; description: string; children: React.ReactNode }> = ({ title, icon: Icon, color, score, description, children }) => (
     <Card className="bg-zinc-900/30 border-zinc-800 overflow-hidden">

@@ -235,6 +235,13 @@ export interface StructuredAbstract {
   results: string;
   conclusion: string;
   keywords: string;
+  // Mapping artifacts to sections for evidence
+  artifactMapping: {
+    background: string[];
+    methods: string[];
+    results: string[];
+    conclusion: string[];
+  };
 }
 
 export interface ProjectSettings {

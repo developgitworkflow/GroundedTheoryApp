@@ -180,7 +180,13 @@ export const parseOwlToProject = (text: string): Partial<ProjectState> => {
           methods: getVal(ontology, "abstractMethods"),
           results: getVal(ontology, "abstractResults"),
           conclusion: getVal(ontology, "abstractConclusion"),
-          keywords: getVal(ontology, "abstractKeywords")
+          keywords: getVal(ontology, "abstractKeywords"),
+          artifactMapping: {
+              background: [],
+              methods: [],
+              results: [],
+              conclusion: []
+          }
       },
       theoreticalFramework: {
           researchQuestions: [],

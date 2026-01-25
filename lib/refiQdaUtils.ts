@@ -1,4 +1,5 @@
 
+
 import JSZip from 'jszip';
 import { ProjectSettings, Artifact, Code, Memo, ResearchTeam, Coding, Participant, Method, Tool, ResearchQuestion } from '../types';
 
@@ -265,7 +266,19 @@ export const parseRefiQdaToProject = async (file: File): Promise<Partial<Project
             fieldOfStudy: { subjectOfStudy: "", objectOfStudy: "", location: "" },
             theoreticalFramework: { researchQuestions: [], methods: [], tools: [], bibliographyContent: "" },
             participants,
-            structuredAbstract: { background: getText(xmlDoc.documentElement, "Description"), methods: "", results: "", conclusion: "", keywords: "" }
+            structuredAbstract: { 
+                background: getText(xmlDoc.documentElement, "Description"), 
+                methods: "", 
+                results: "", 
+                conclusion: "", 
+                keywords: "",
+                artifactMapping: {
+                    background: [],
+                    methods: [],
+                    results: [],
+                    conclusion: []
+                }
+            }
         },
         team: {
             id: 'imported-team',
