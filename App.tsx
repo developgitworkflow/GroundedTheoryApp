@@ -37,6 +37,7 @@ import { cn } from './lib/utils';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from './components/ui/hover-card';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from './components/ui/card';
 import { Badge } from './components/ui/badge';
+import { Toaster, ToastProps } from './components/ui/toast';
 
 const INITIAL_LAYERS: LayerConfig[] = [
   { id: LayerType.ARTIFACT, label: 'Artifact Source', visible: true, color: '#fff' },
@@ -192,6 +193,9 @@ export default function App() {
   // Drag Action State (Replacing pure Merge state)
   const [dragAction, setDragAction] = useState<{source: Code, target: Code} | null>(null);
 
+  // Toast State
+  const [toasts, setToasts] = useState<ToastProps[]>([]);
+
   const activeResearcher = researchTeam.researchers.find(r => r.id === activeResearcherId) || researchTeam.researchers[0];
   
   const [theoryArtefact, setTheoryArtefact] = useState<Theory>({
@@ -216,6 +220,15 @@ export default function App() {
         authorId: activeResearcherId
     };
     setJournalEntries(prev => [...prev, entry]);
+  };
+
+  const showToast = (title: string, description?: string, type: 'success' | 'error' | 'info' = 'info') => {
+      const id = Date.now().toString();
+      setToasts(prev => [...prev, { id, title, description, type, onDismiss: dismissToast }]);
+  };
+
+  const dismissToast = (id: string) => {
+      setToasts(prev => prev.filter(t => t.id !== id));
   };
 
   const toggleLayer = (id: LayerType) => {
@@ -294,6 +307,7 @@ export default function App() {
       };
       setArtifacts(prev => [...prev, newArt]);
       addJournalEntry(`Received new artifact into ${newArt.status}: ${newArt.name}`, 'auto');
+      showToast('Artifact Imported', `Created "${newArt.name}" in ${newArt.status} phase.`, 'success');
   };
 
   const handleConvertToArtifact = (title: string, content: string, typeSource: string, sourceId?: string) => {
@@ -317,6 +331,7 @@ export default function App() {
       };
       setArtifacts(prev => [...prev, newArt]);
       addJournalEntry(`Converted ${typeSource} [${title}] into new Artifact`, 'auto');
+      showToast('Saved as Artifact', `"${title}" has been successfully converted into a new data artifact.`, 'success');
   };
 
   const handleAddCoding = (coding: Omit<Coding, 'id'>) => {
@@ -378,6 +393,7 @@ export default function App() {
       
       addJournalEntry(`Merged code [${source.name}] into [${target.name}]`, 'auto');
       setDragAction(null);
+      showToast('Merged Successfully', `Merged ${source.name} into ${target.name}.`, 'info');
   };
 
   const executeNest = () => {
@@ -405,6 +421,7 @@ export default function App() {
       
       addJournalEntry(`Nested [${source.name}] under [${target.name}]`, 'auto');
       setDragAction(null);
+      showToast('Codes Grouped', `${source.name} is now a child of ${target.name}.`, 'info');
   };
 
   const handleDeleteCode = (id: string) => {
@@ -423,6 +440,7 @@ export default function App() {
 
   const handleElaborateOntology = async () => {
       setIsElaborating(true);
+      showToast('AI Analyzing', 'Structuring your open codes into categories...', 'info');
       const suggestions = await suggestOntology(codes);
       
       let newCodes = [...codes];
@@ -457,6 +475,9 @@ export default function App() {
       if (updates > 0) {
           setCodes(newCodes);
           addJournalEntry(`AI Elaborated Ontology: Linked ${updates} codes to categories.`, 'auto');
+          showToast('Ontology Updated', `Organized ${updates} codes into hierarchies.`, 'success');
+      } else {
+          showToast('No Changes', 'AI could not find better structures for your codes.', 'info');
       }
       setIsElaborating(false);
   };
@@ -469,6 +490,7 @@ export default function App() {
       if (data.memos) setMemos(data.memos);
       // Team might be partially imported or kept separate depending on auth
       addJournalEntry(`Full Project Import Completed: ${data.settings?.projectName || 'Unknown Project'}`, 'auto');
+      showToast('Project Imported', 'Project data has been successfully loaded.', 'success');
   };
 
   return (
@@ -890,6 +912,9 @@ export default function App() {
             onImportProject={handleImportProject}
             onConvertToArtifact={handleConvertToArtifact}
         />
+
+        {/* Global Toast Container */}
+        <Toaster toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 };
