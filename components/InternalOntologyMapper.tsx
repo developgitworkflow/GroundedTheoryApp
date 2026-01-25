@@ -4,8 +4,9 @@ import * as d3 from 'd3';
 import { ProjectSettings, Artifact, Code, Memo, ResearchTeam, Coding } from '../types';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { Network, Database, ChevronRight, X } from 'lucide-react';
+import { Network, Database, ChevronRight, X, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface InternalOntologyMapperProps {
@@ -46,6 +47,7 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [selectedNode, setSelectedNode] = useState<OntologyNode | null>(null);
 
   // --- 1. Map Real Data to Abstract Ontology ---
@@ -157,6 +159,19 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
         .attr("d", "M0,-5L10,0L0,5")
         .attr("fill", "#52525b");
 
+    // Container Group for Zooming
+    const container = svg.append("g");
+
+    // Zoom Behavior
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 4])
+        .on("zoom", (event) => {
+            container.attr("transform", event.transform);
+        });
+    
+    svg.call(zoom).on("dblclick.zoom", null);
+    zoomRef.current = zoom;
+
     // Simulation
     const simulation = d3.forceSimulation(graphData.nodes as any)
         .force("link", d3.forceLink(graphData.links).id((d: any) => d.id).distance(120))
@@ -164,8 +179,8 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
         .force("center", d3.forceCenter(width / 2, height / 2))
         .force("collide", d3.forceCollide().radius(50));
 
-    const linkGroup = svg.append("g");
-    const nodeGroup = svg.append("g");
+    const linkGroup = container.append("g");
+    const nodeGroup = container.append("g");
 
     // Draw Links
     const link = linkGroup.selectAll(".link")
@@ -242,7 +257,9 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
         .attr("text-anchor", "middle")
         .attr("fill", "#e4e4e7")
         .attr("font-size", 10)
-        .attr("font-weight", "bold");
+        .attr("font-weight", "bold")
+        .style("pointer-events", "none") // Ensure drag works on circle
+        .style("text-shadow", "0 1px 4px black");
 
     // Node Count Badge (inside circle)
     node.append("text")
@@ -251,7 +268,8 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
         .attr("text-anchor", "middle")
         .attr("fill", "white")
         .attr("font-size", 14)
-        .attr("font-weight", "bold");
+        .attr("font-weight", "bold")
+        .style("pointer-events", "none");
 
     // Update positions
     simulation.on("tick", () => {
@@ -275,6 +293,25 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
 
     return () => { simulation.stop(); };
   }, [graphData]);
+
+  // UI Handlers
+  const handleZoomIn = () => {
+      if (svgRef.current && zoomRef.current) {
+          d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 1.2);
+      }
+  };
+
+  const handleZoomOut = () => {
+      if (svgRef.current && zoomRef.current) {
+          d3.select(svgRef.current).transition().duration(300).call(zoomRef.current.scaleBy, 0.8);
+      }
+  };
+
+  const handleResetZoom = () => {
+      if (svgRef.current && zoomRef.current) {
+          d3.select(svgRef.current).transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+      }
+  };
 
   // Helper colors
   const getDomainColor = (domain: DomainType) => {
@@ -310,12 +347,26 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
             </div>
             
             <svg ref={svgRef} width="100%" height="100%" className="cursor-grab active:cursor-grabbing" />
+
+            {/* Zoom Controls */}
+            <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-black/60 backdrop-blur-md p-1 rounded-lg border border-zinc-800/50 shadow-xl pointer-events-auto z-10">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleZoomIn} title="Zoom In">
+                    <ZoomIn size={16} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleZoomOut} title="Zoom Out">
+                    <ZoomOut size={16} />
+                </Button>
+                <div className="h-px bg-zinc-700 mx-2" />
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" onClick={handleResetZoom} title="Reset View">
+                    <Maximize size={16} />
+                </Button>
+            </div>
         </div>
 
         {/* Inspector Panel */}
         {selectedNode && (
             <Card className={cn(
-                "w-80 h-full border-l rounded-none shadow-2xl absolute right-0 top-0 bottom-0 animate-in slide-in-from-right",
+                "w-80 h-full border-l rounded-none shadow-2xl absolute right-0 top-0 bottom-0 animate-in slide-in-from-right z-20",
                 "bg-zinc-950 border-zinc-800"
             )}>
                 <CardHeader className={cn("border-b border-zinc-800/50", getDomainColor(selectedNode.domain))}>
