@@ -235,6 +235,7 @@ export interface StructuredAbstract {
   results: string;
   conclusion: string;
   keywords: string;
+  freeform?: string;
   // Mapping artifacts to sections for evidence
   artifactMapping: {
     background: string[];

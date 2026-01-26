@@ -31,12 +31,17 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
 
   // --- Data Processing Helpers ---
 
-  // 1. Code Frequency
+  // 1. Code Frequency & Saturation
   const codeStats = useMemo(() => {
-    return codes.map(code => ({
-      ...code,
-      count: codings.filter(c => c.codeId === code.id).length
-    })).sort((a, b) => b.count - a.count);
+    return codes.map(code => {
+      const relevantCodings = codings.filter(c => c.codeId === code.id);
+      const uniqueSources = new Set(relevantCodings.map(c => c.artifactId)).size;
+      return {
+        ...code,
+        count: relevantCodings.length,
+        sourceCount: uniqueSources
+      };
+    }).sort((a, b) => b.count - a.count);
   }, [codes, codings]);
 
   // 2. Word Frequency (for Cloud)
@@ -96,7 +101,7 @@ export const Visualizations: React.FC<VisualizationsProps> = ({ codes, codings, 
                 <CardTitle className="text-zinc-200 flex items-center gap-2 text-lg">
                     {activeChart === 'bar' && 'Code Frequency Distribution'}
                     {activeChart === 'donut' && 'Coding Proportions'}
-                    {activeChart === 'treemap' && 'Hierarchical Code Density'}
+                    {activeChart === 'treemap' && 'Hierarchical Code Density & Saturation'}
                     {activeChart === 'cloud' && 'Content Word Cloud'}
                     {activeChart === 'chord' && 'Code Co-Occurrence Chord'}
                     {activeChart === 'heatmap' && 'Code-Artifact Matrix'}
@@ -186,27 +191,138 @@ const BarChart = ({ data }: { data: (Code & { count: number })[] }) => {
 const DonutChart = ({ data }: { data: (Code & { count: number })[] }) => {
     const ref = useRef<SVGSVGElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const [hoveredData, setHoveredData] = useState<{ name: string; count: number; color: string } | null>(null);
+
+    const total = useMemo(() => data.reduce((acc, curr) => acc + curr.count, 0), [data]);
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current) return;
         const svg = d3.select(ref.current);
         svg.selectAll("*").remove();
+        
         const { width, height } = wrapperRef.current.getBoundingClientRect();
-        const radius = Math.min(width, height) / 2 - 40;
-        const pie = d3.pie<any>().value(d => d.count).sort(null);
-        const arc = d3.arc<any>().innerRadius(radius * 0.6).outerRadius(radius);
+        const margin = 40;
+        const radius = Math.min(width, height) / 2 - margin;
+        
+        const pieData = data.filter(d => d.count > 0);
+        
+        const pie = d3.pie<any>()
+            .value(d => d.count)
+            .sort((a, b) => b.count - a.count)
+            .padAngle(0.02);
+
+        const arc = d3.arc<any>()
+            .innerRadius(radius * 0.65)
+            .outerRadius(radius)
+            .cornerRadius(4);
+
+        const arcHover = d3.arc<any>()
+            .innerRadius(radius * 0.65)
+            .outerRadius(radius + 8)
+            .cornerRadius(4);
+
         const g = svg.append("g").attr("transform", `translate(${width / 2},${height / 2})`);
         
-        g.selectAll("path").data(pie(data.filter(d => d.count > 0))).enter().append("path")
-            .attr("d", arc).attr("fill", (d: any) => d.data.color).attr("stroke", "#18181b").attr("stroke-width", "2px");
+        // Paths
+        const path = g.selectAll("path")
+            .data(pie(pieData))
+            .enter().append("path")
+            .attr("d", arc)
+            .attr("fill", (d: any) => d.data.color)
+            .attr("stroke", "#18181b")
+            .attr("stroke-width", "2px")
+            .style("cursor", "pointer")
+            .style("transition", "opacity 0.3s");
+
+        // Interactions
+        path.on("mouseenter", function(event, d: any) {
+            d3.select(this)
+                .transition().duration(200)
+                .attr("d", arcHover);
+            
+            g.selectAll("path").filter((node) => node !== d).style("opacity", 0.3);
+            setHoveredData(d.data);
+        })
+        .on("mouseleave", function(event, d) {
+            d3.select(this)
+                .transition().duration(200)
+                .attr("d", arc);
+            
+            g.selectAll("path").style("opacity", 1);
+            setHoveredData(null);
+        });
+
     }, [data]);
 
-    return <div ref={wrapperRef} className="w-full h-full p-4"><svg ref={ref} width="100%" height="100%" /></div>;
+    return (
+        <div ref={wrapperRef} className="w-full h-full p-4 relative">
+            <svg ref={ref} width="100%" height="100%" />
+            
+            {/* Center Information */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                    {hoveredData ? (
+                        <div className="animate-in fade-in zoom-in-95 duration-200">
+                            <div className="text-4xl font-bold text-zinc-100 drop-shadow-md" style={{ color: hoveredData.color }}>
+                                {total > 0 ? Math.round((hoveredData.count / total) * 100) : 0}<span className="text-lg align-top">%</span>
+                            </div>
+                            <div className="text-sm font-medium text-zinc-200 mt-1 max-w-[160px] truncate mx-auto bg-zinc-950/50 px-2 rounded">
+                                {hoveredData.name}
+                            </div>
+                            <div className="text-[10px] text-zinc-500 font-mono mt-1">
+                                {hoveredData.count} References
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="animate-in fade-in zoom-in-95 duration-200">
+                            <div className="text-4xl font-bold text-zinc-200">
+                                {total}
+                            </div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1 font-semibold">
+                                Total Codings
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Legend (if < 10 items for neatness) */}
+            {data.filter(d => d.count > 0).length <= 12 && (
+                <div className="absolute right-4 top-4 bottom-4 w-40 overflow-y-auto custom-scrollbar pr-2 pointer-events-auto">
+                    <div className="flex flex-col gap-2">
+                        {data.filter(d => d.count > 0).map(d => (
+                            <div 
+                                key={d.id} 
+                                className={cn(
+                                    "flex items-center gap-2 text-xs p-1.5 rounded transition-colors",
+                                    hoveredData?.name === d.name ? "bg-zinc-800" : "hover:bg-zinc-900/50"
+                                )}
+                                onMouseEnter={() => setHoveredData(d)}
+                                onMouseLeave={() => setHoveredData(null)}
+                            >
+                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                                <span className={cn("truncate flex-1", hoveredData?.name === d.name ? "text-zinc-100" : "text-zinc-400")}>{d.name}</span>
+                                <span className="text-[9px] font-mono text-zinc-600">{d.count}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
-const TreeMap = ({ data }: { data: (Code & { count: number })[] }) => {
+const TreeMap = ({ data }: { data: (Code & { count: number; sourceCount: number })[] }) => {
     const ref = useRef<SVGSVGElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const [hoverInfo, setHoverInfo] = useState<{ 
+        name: string; 
+        value: number; 
+        sources: number; 
+        type: 'category' | 'code' | 'root';
+        color: string;
+        children?: number;
+    } | null>(null);
 
     useEffect(() => {
         if (!ref.current || !wrapperRef.current || data.length === 0) return;
@@ -214,18 +330,173 @@ const TreeMap = ({ data }: { data: (Code & { count: number })[] }) => {
         svg.selectAll("*").remove();
         const { width, height } = wrapperRef.current.getBoundingClientRect();
         
-        const root = d3.hierarchy({ children: data.filter(d=>d.count>0) }).sum((d: any) => d.count);
-        d3.treemap().size([width, height]).padding(2)(root);
+        // 1. Build Hierarchy
+        // Create root
+        const rootNode = { id: 'root', name: 'Ontology', children: [] as any[], color: '#000', kind: 'root', count: 0, sourceCount: 0 };
+        const idMap = new Map<string, any>();
+        
+        // Initialize map with enriched data
+        data.forEach(d => {
+            idMap.set(d.id, { ...d, children: [] });
+        });
 
-        // Explicit cast to HierarchyRectangularNode to access layout properties
-        const leaves = root.leaves() as d3.HierarchyRectangularNode<any>[];
+        // Nest items
+        data.forEach(d => {
+            const node = idMap.get(d.id);
+            if (d.parentId && idMap.has(d.parentId)) {
+                idMap.get(d.parentId).children.push(node);
+            } else {
+                rootNode.children.push(node);
+            }
+        });
 
-        const nodes = svg.selectAll("g").data(leaves).enter().append("g").attr("transform", d => `translate(${d.x0},${d.y0})`);
-        nodes.append("rect").attr("width", d => d.x1 - d.x0).attr("height", d => d.y1 - d.y0).attr("fill", (d: any) => d.data.color).attr("rx", 4);
-        nodes.append("text").attr("x", 4).attr("y", 14).text((d: any) => d.data.name).attr("fill", "white").attr("font-size", "10px");
+        // 2. D3 Layout
+        const root = d3.hierarchy(rootNode)
+            .sum((d: any) => d.count || 0) // Size by Coding Frequency
+            .sort((a, b) => (b.value || 0) - (a.value || 0));
+
+        d3.treemap()
+            .size([width, height])
+            .paddingTop(20)
+            .paddingRight(3)
+            .paddingInner(3)
+            .paddingOuter(3)
+            .round(true)
+            (root);
+
+        // 3. Render
+        // Render Categories (Groups)
+        const categories = root.descendants().filter(d => d.depth === 1);
+        
+        const catGroups = svg.selectAll(".cat")
+            .data(categories)
+            .enter().append("g")
+            .attr("transform", (d: any) => `translate(${d.x0},${d.y0})`);
+
+        // Category Labels (Background Header)
+        catGroups.append("rect")
+            .attr("width", (d: any) => d.x1 - d.x0)
+            .attr("height", (d: any) => d.y1 - d.y0)
+            .attr("fill", (d: any) => d.data.color)
+            .attr("fill-opacity", 0.1)
+            .attr("stroke", (d: any) => d.data.color)
+            .attr("stroke-opacity", 0.3);
+
+        catGroups.append("text")
+            .attr("x", 4)
+            .attr("y", 12)
+            .text((d: any) => d.data.name)
+            .attr("font-size", "10px")
+            .attr("font-weight", "bold")
+            .attr("fill", (d: any) => d.data.color)
+            .style("text-transform", "uppercase");
+
+        // Render Leaves (Codes)
+        const leaves = root.leaves();
+        const nodes = svg.selectAll(".leaf")
+            .data(leaves)
+            .enter().append("g")
+            .attr("transform", (d: any) => `translate(${d.x0},${d.y0})`);
+
+        nodes.append("rect")
+            .attr("width", (d: any) => d.x1 - d.x0)
+            .attr("height", (d: any) => d.y1 - d.y0)
+            .attr("fill", (d: any) => d.data.color)
+            .attr("fill-opacity", 0.8)
+            .attr("rx", 2)
+            .attr("stroke", "#18181b")
+            .attr("stroke-width", 1)
+            .on("mouseenter", (e, d: any) => {
+                setHoverInfo({
+                    name: d.data.name,
+                    value: d.data.count,
+                    sources: d.data.sourceCount,
+                    type: d.data.kind,
+                    color: d.data.color
+                });
+                d3.select(e.currentTarget).attr("fill-opacity", 1);
+            })
+            .on("mouseleave", (e, d) => {
+                setHoverInfo(null);
+                d3.select(e.currentTarget).attr("fill-opacity", 0.8);
+            });
+
+        // Code Labels (Clipped)
+        nodes.append("clipPath")
+            .attr("id", (d: any) => `clip-${d.data.id}`)
+            .append("rect")
+            .attr("width", (d: any) => Math.max(0, d.x1 - d.x0 - 4))
+            .attr("height", (d: any) => Math.max(0, d.y1 - d.y0 - 4));
+
+        nodes.append("text")
+            .attr("clip-path", (d: any) => `url(#clip-${d.data.id})`)
+            .attr("x", 4)
+            .attr("y", 14)
+            .text((d: any) => d.data.name)
+            .attr("fill", "white")
+            .attr("font-size", "10px")
+            .style("display", (d: any) => (d.x1 - d.x0) > 30 && (d.y1 - d.y0) > 20 ? "block" : "none");
+
+        // Saturation Dots (Visual Indicator)
+        nodes.append("g")
+            .attr("transform", (d: any) => `translate(4, ${d.y1 - d.y0 - 10})`)
+            .each(function(d: any) {
+                if ((d.x1 - d.x0) < 40 || (d.y1 - d.y0) < 30) return;
+                const g = d3.select(this);
+                // Draw small dots for unique sources (capped at 5 visually)
+                const dotCount = Math.min(d.data.sourceCount, 5);
+                for (let i = 0; i < dotCount; i++) {
+                    g.append("circle")
+                        .attr("cx", i * 5)
+                        .attr("cy", 0)
+                        .attr("r", 1.5)
+                        .attr("fill", "white")
+                        .attr("opacity", 0.7);
+                }
+                if (d.data.sourceCount > 5) {
+                    g.append("text").text("+").attr("x", 26).attr("y", 2).attr("font-size", "8px").attr("fill", "white");
+                }
+            });
+
     }, [data]);
 
-    return <div ref={wrapperRef} className="w-full h-full p-4"><svg ref={ref} width="100%" height="100%" /></div>;
+    return (
+        <div ref={wrapperRef} className="w-full h-full p-4 relative">
+            <svg ref={ref} width="100%" height="100%" />
+            
+            {/* Interactive HUD */}
+            {hoverInfo && (
+                <div className="absolute top-4 right-4 bg-zinc-950/90 border border-zinc-800 p-3 rounded-lg shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: hoverInfo.color }} />
+                        <span className="font-bold text-zinc-100 text-sm">{hoverInfo.name}</span>
+                        <Badge variant="outline" className="text-[9px] px-1 h-4 uppercase">{hoverInfo.type}</Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <div className="text-[10px] uppercase text-zinc-500 font-bold">Frequency</div>
+                            <div className="text-lg font-mono text-zinc-200">{hoverInfo.value} <span className="text-[10px] text-zinc-600">refs</span></div>
+                        </div>
+                        <div>
+                            <div className="text-[10px] uppercase text-zinc-500 font-bold flex items-center gap-1">
+                                Saturation
+                            </div>
+                            <div className="text-lg font-mono text-zinc-200">{hoverInfo.sources} <span className="text-[10px] text-zinc-600">sources</span></div>
+                        </div>
+                    </div>
+                    <div className="mt-2 h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                        {/* Visual bar showing Saturation vs Frequency (just indicative) */}
+                        <div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500" 
+                            style={{ width: `${Math.min(100, (hoverInfo.sources / Math.max(1, hoverInfo.value)) * 100 * 2)}%` }} // Arbitrary scaling for visual effect
+                        />
+                    </div>
+                    <div className="text-[9px] text-zinc-600 mt-1 text-right italic">Theoretical Saturation Index</div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 const SankeyChart = ({ codes, codings, artifacts }: { codes: Code[], codings: Coding[], artifacts: Artifact[] }) => {

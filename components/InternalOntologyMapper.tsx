@@ -6,8 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
-import { Network, Database, ChevronRight, X, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { Network, Database, ChevronRight, X, ZoomIn, ZoomOut, Maximize, Download } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { exportProjectToOwl } from '../lib/owlUtils';
 
 interface InternalOntologyMapperProps {
   settings: ProjectSettings;
@@ -313,6 +314,26 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
       }
   };
 
+  const handleExportOwl = () => {
+      const owlData = exportProjectToOwl({
+          settings,
+          team,
+          codes,
+          codings,
+          artifacts,
+          memos
+      });
+      const blob = new Blob([owlData], { type: 'application/rdf+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${settings.projectName.replace(/\s+/g, '_')}_ontology.owl`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
   // Helper colors
   const getDomainColor = (domain: DomainType) => {
       switch(domain) {
@@ -344,6 +365,17 @@ export const InternalOntologyMapper: React.FC<InternalOntologyMapperProps> = ({
                     <div className="w-3 h-3 rounded-full bg-emerald-900 border border-emerald-400"></div>
                     <span className="text-xs text-zinc-400">Findings</span>
                 </div>
+            </div>
+
+            <div className="absolute top-4 right-4 z-10 flex gap-2">
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleExportOwl} 
+                    className="gap-2 bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-white shadow-lg backdrop-blur-md"
+                >
+                    <Download size={14} /> Export OWL
+                </Button>
             </div>
             
             <svg ref={svgRef} width="100%" height="100%" className="cursor-grab active:cursor-grabbing" />

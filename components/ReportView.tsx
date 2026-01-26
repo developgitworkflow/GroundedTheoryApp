@@ -1,5 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { ProjectSettings, Memo, Artifact, Code, ResearchTeam } from '../types';
+import { generateStructuredAbstract } from '../services/geminiService';
 import { 
   FileText, 
   Sparkles, 
@@ -23,7 +25,8 @@ import {
   Archive, 
   GripVertical, 
   Link as LinkIcon, 
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -50,6 +53,7 @@ export const ReportView: React.FC<ReportViewProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'abstract' | 'fair'>('abstract');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [draggedArtifactId, setDraggedArtifactId] = useState<string | null>(null);
 
   const abstract = settings.structuredAbstract;
@@ -63,46 +67,25 @@ export const ReportView: React.FC<ReportViewProps> = ({
   };
 
   // --- Auto-Generation Logic ---
-  const handleAutoGenerate = () => {
-    const { fieldOfStudy, theoreticalFramework, participants, theoryType } = settings;
-    const findings = memos.filter(m => m.type === 'finding');
-    const coreCategory = codes.find(c => c.isCore);
-
-    // 1. Background / Objective
-    const bgText = `This study investigates ${fieldOfStudy.subjectOfStudy || '[Subject]'} within the context of ${fieldOfStudy.location || '[Location]'}. The primary problem addressed is ${fieldOfStudy.objectOfStudy || '[Object of Study]'}. Specifically, the research aimed to answer the following question(s): ${theoreticalFramework.researchQuestions.map(rq => `"${rq.content}"`).join(' ')}`;
-
-    // 2. Methods
-    const methodTypes = Array.from(new Set(theoreticalFramework.methods.map(m => m.type))).join(', ');
-    const methodText = `A ${theoryType} Grounded Theory approach was employed. Data was collected via ${methodTypes || 'qualitative methods'} involving ${participants.length} participants (${participants.map(p => p.description).join(', ')}). Analysis proceeded through open, axial, and selective coding phases using Stratum CAQDAS software.`;
-
-    // 3. Results
-    let resultsText = `The analysis identified ${codes.filter(c => c.kind === 'category').length} conceptual categories. `;
-    if (coreCategory) {
-        resultsText += `The core category, "${coreCategory.name}", emerged as the central phenomenon explaining the data. `;
+  const handleAutoGenerate = async () => {
+    setIsGenerating(true);
+    const generated = await generateStructuredAbstract(settings, codes, memos);
+    
+    if (generated) {
+        onUpdateSettings({
+            ...settings,
+            structuredAbstract: {
+                ...abstract,
+                background: generated.background || abstract.background,
+                methods: generated.methods || abstract.methods,
+                results: generated.results || abstract.results,
+                conclusion: generated.conclusion || abstract.conclusion,
+                keywords: generated.keywords || abstract.keywords,
+                artifactMapping: abstract.artifactMapping // Preserve mappings
+            }
+        });
     }
-    if (findings.length > 0) {
-        resultsText += `Key findings include: ${findings.slice(0, 3).map(f => f.title).join('; ')}.`;
-    } else {
-        resultsText += `(No specific findings recorded yet).`;
-    }
-
-    // 4. Conclusion (Template)
-    const conclusionText = `These results suggest that [Subject] navigates [Phenomenon] through specific strategies. The theoretical implications extend to [Field], offering a framework for understanding ${fieldOfStudy.objectOfStudy}. Limitations include the specific context of ${fieldOfStudy.location}.`;
-
-    // 5. Keywords
-    const keywordText = `Grounded Theory, ${fieldOfStudy.subjectOfStudy}, ${coreCategory ? coreCategory.name : ''}, Qualitative Analysis`;
-
-    onUpdateSettings({
-        ...settings,
-        structuredAbstract: {
-            ...abstract,
-            background: bgText,
-            methods: methodText,
-            results: resultsText,
-            conclusion: conclusionText,
-            keywords: keywordText
-        }
-    });
+    setIsGenerating(false);
   };
 
   const handleUpdate = (field: keyof typeof abstract, value: string) => {
@@ -266,8 +249,10 @@ export const ReportView: React.FC<ReportViewProps> = ({
                         <Button 
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-lg shadow-blue-900/20"
                             onClick={handleAutoGenerate}
+                            disabled={isGenerating}
                         >
-                            <Sparkles size={16} /> Auto-Generate
+                            {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} 
+                            {isGenerating ? 'Drafting...' : 'AI Auto-Generate'}
                         </Button>
                         {onConvertToArtifact && (
                             <Button 

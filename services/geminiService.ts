@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Code } from "../types";
+import { Code, ProjectSettings, Memo, StructuredAbstract } from "../types";
 
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
@@ -104,5 +104,77 @@ export const suggestOntology = async (codes: Code[]): Promise<{ parent: string; 
   } catch (error) {
     console.error("Error suggesting ontology:", error);
     return [];
+  }
+};
+
+export const generateStructuredAbstract = async (
+  settings: ProjectSettings,
+  codes: Code[],
+  findings: Memo[]
+): Promise<Partial<StructuredAbstract> | null> => {
+  const ai = getAiClient();
+  if (!ai) return null;
+
+  try {
+    const coreCategory = codes.find(c => c.isCore)?.name || "Undetermined";
+    const categories = codes.filter(c => c.kind === 'category').map(c => c.name).join(', ');
+    const findingTexts = findings.filter(f => f.type === 'finding').map(f => `- ${f.title}: ${f.content}`).join('\n');
+    const questions = settings.theoreticalFramework.researchQuestions.map(rq => rq.content).join('\n');
+
+    const prompt = `
+      You are an expert qualitative researcher using ${settings.theoryType} Grounded Theory.
+      Write a Structured Abstract for a research paper based on the following project data.
+      
+      CONTEXT:
+      - Project: ${settings.projectName}
+      - Subject: ${settings.fieldOfStudy.subjectOfStudy}
+      - Phenomenon: ${settings.fieldOfStudy.objectOfStudy}
+      - Location: ${settings.fieldOfStudy.location}
+      
+      RESEARCH QUESTIONS:
+      ${questions}
+      
+      METHODOLOGY:
+      - Methods: ${settings.theoreticalFramework.methods.map(m => m.type).join(', ')}
+      - Participants: ${settings.participants.length} (${settings.participants.map(p => p.description).join('; ')})
+      
+      ANALYSIS RESULTS:
+      - Core Category: ${coreCategory}
+      - Major Categories: ${categories}
+      - Emergent Findings:
+      ${findingTexts}
+      
+      OUTPUT REQUIREMENTS:
+      Generate a JSON object with these fields:
+      - background: 2-3 sentences on context and objective.
+      - methods: 2-3 sentences on participants and data collection.
+      - results: 3-4 sentences on the core category and key findings.
+      - conclusion: 2-3 sentences on implications.
+      - keywords: 5-7 comma-separated keywords.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            background: { type: Type.STRING },
+            methods: { type: Type.STRING },
+            results: { type: Type.STRING },
+            conclusion: { type: Type.STRING },
+            keywords: { type: Type.STRING },
+          },
+        },
+      },
+    });
+
+    const json = JSON.parse(response.text || '{}');
+    return json;
+  } catch (error) {
+    console.error("Error generating abstract:", error);
+    return null;
   }
 };
